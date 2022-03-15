@@ -66,12 +66,8 @@ public class Program
                 {
                     _beforeDate = createdTime;
                     Logger.Log("----Created new appointment----");
-                    return true;
                 }
-                else
-                {
-                    return false;
-                }
+                return true;
 
             }
 
