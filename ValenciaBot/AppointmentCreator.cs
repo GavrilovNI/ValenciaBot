@@ -89,7 +89,7 @@ public class AppointmentCreator : DriverWithDialogs
 
             createdTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, selectedTime.Hour, selectedTime.Minute, 1);
 
-            Logger.Log($"Appointment Created! Time:{createdTime:hh:mm dd:MM:yyyy} service: '{service}' center: '{center}'");
+            Logger.Log($"Appointment Created! Time:{createdTime:HH:mm dd:MM:yyyy} service: '{service}' center: '{center}'");
             return true;
         }
         catch (Exception ex)
@@ -162,7 +162,7 @@ public class AppointmentCreator : DriverWithDialogs
         timeSelector.SelectByIndex(index);
         var time = timeSelector.Options[index].GetAttribute("label");
 
-        return DateTime.ParseExact(time, "hh:mm", CultureInfo.InvariantCulture);
+        return DateTime.ParseExact(time, "HH:mm", CultureInfo.InvariantCulture);
     }
 
     private void SetName(string name, string surname)

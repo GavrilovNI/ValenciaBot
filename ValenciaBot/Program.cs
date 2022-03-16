@@ -24,7 +24,7 @@ public class Program
 
     //private string _service = "ATENCION ESPECIALIZADA-LICENCIAS, INOCUAS,CONTENEDORES";
     //private string _center = "JUNTA DE DISTRITO ABASTOS";
-    private DateTime _beforeDate = new DateTime(2022, 4, 13);
+    private DateTime _beforeDate = new DateTime(2022, 6, 13);
     private string _name = "Name";
     private string _surname = "Surname";
     private string _documentType = "Pasaporte";
@@ -32,17 +32,12 @@ public class Program
     private string _phoneNumber = "681123456";
     private string _email = "email@email.com";
 
-    private Appointments _appointments;
-    private AppointmentCreator _creator;
+    private Appointments? _appointments;
+    private AppointmentCreator? _creator;
 
     private int _delayInSeconds = 60;
     private System.Timers.Timer? _timer = null;
     public bool Running => _timer != null;
-
-    public Program()
-    {
-        
-    }
 
     private bool Do()
     {
@@ -76,8 +71,8 @@ public class Program
         catch(Exception ex)
         {
             Logger.LogError($"{ex.Message} {ex.StackTrace}");
-            _creator.Close();
-            _appointments.Close();
+            _creator!.Close();
+            _appointments!.Close();
             return false;
         }
     }
@@ -87,11 +82,13 @@ public class Program
         if(Running == false)
             return;
         Logger.Log("Stop");
+
         _timer!.Stop();
         _timer!.Dispose();
         _timer = null;
-        _appointments.Close();
-        _creator.Close();
+        _appointments!.Close();
+        _creator!.Close();
+
     }
 
 
@@ -113,8 +110,11 @@ public class Program
             }
         }
 
-        void TimerTask(object? o, ElapsedEventArgs? a)
+        void TimerTask(object? o, object? a)
         {
+            if(_timer != null)
+                _timer.Stop();
+
             bool needToBeRestartedImmidiately = false;
             do
             {
@@ -125,10 +125,10 @@ public class Program
             while(needToBeRestartedImmidiately && _timer != null);
 
             if(_timer != null)
-                _timer!.Enabled = true;
+                _timer.Start();
         }
 
-        _timer = new System.Timers.Timer(_delayInSeconds * 2000);
+        _timer = new System.Timers.Timer(_delayInSeconds * 1000);
         _timer.Elapsed += TimerTask;
         _timer.AutoReset = false;
 
@@ -137,7 +137,7 @@ public class Program
 
     private DateTime? GetAppointmentDate()
     {
-        _appointments.Open();
+        _appointments!.Open();
         Appointment? appointment = _appointments.GetAppointment(_service, _center);
         DateTime? result = appointment?.Time;
         _appointments.Close();
@@ -146,7 +146,7 @@ public class Program
 
     private bool HasAppointment()
     {
-        _appointments.Open();
+        _appointments!.Open();
         bool has = _appointments.HasAppointment(_service, _center);
         _appointments.Close();
         return has;
@@ -154,7 +154,7 @@ public class Program
 
     private bool RemoveAppointmentByPoint()
     {
-        _appointments.Open();
+        _appointments!.Open();
         bool removed = _appointments.TryRemoveAppointment(_service, _center);
         _appointments.Close();
         return removed;
@@ -162,7 +162,7 @@ public class Program
 
     private DateTime? GetFirstAvaliableDate()
     {
-        _creator.Open();
+        _creator!.Open();
         DateTime? dateTime = _creator.GetFirstAvaliableDate(_service, _center, _beforeDate);
         _creator.Close();
 
@@ -171,7 +171,7 @@ public class Program
 
     private bool CreateAppointment(out DateTime createdTime)
     {
-        _creator.Open();
+        _creator!.Open();
         bool created =_creator.CreateAppointment(_service, _center, _beforeDate, _name, _surname, _documentType, _document, _phoneNumber, _email, out createdTime);
         _creator.Close();
 

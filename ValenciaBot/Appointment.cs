@@ -16,7 +16,7 @@ public class Appointment : DriverWithDialogs
         get
         {
             string time = _appointment.FindElement(By.XPath("p[1]")).Text;
-            return DateTime.ParseExact(time, "dd/MM/yyyy - hh:mm", CultureInfo.InvariantCulture);
+            return DateTime.ParseExact(time, "dd/MM/yyyy - HH:mm", CultureInfo.InvariantCulture);
         }
     }
     public string Center
