@@ -18,7 +18,7 @@ public class Appointments : DriverWithDialogs
 
     public Appointments(string document)
     {
-        _logger.Log($"Start document:{document}");
+        _logger.Log($"Start. Document: '{document}'");
         _document = document;
     }
 
@@ -110,7 +110,7 @@ public class Appointments : DriverWithDialogs
                                         time.Day == dateTime.Day &&
                                         time.Hour == dateTime.Hour &&
                                         time.Minute == dateTime.Minute;
-        var result = TryRemoveAppointment(a => a.Service == service && a.Center == center && timeMatch(a.Time));
+        var result = TryRemoveAppointment(a => a.Service == service && a.Center == center && timeMatch(a.DateTime));
         _logger.StopMethod(result);
         return result;
     }

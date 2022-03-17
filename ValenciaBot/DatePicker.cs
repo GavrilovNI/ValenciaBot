@@ -47,7 +47,7 @@ public class DatePicker
             _showCalendarButton.Click();
     }
 
-    public DateTime GetCurrentYearAndMonth()
+    public DateOnly GetCurrentYearAndMonth()
     {
         string stringDate = _yearAndMonthButton.Text;
         string stringYear = stringDate.Substring(0, 4);
@@ -60,7 +60,7 @@ public class DatePicker
         else
             month++;
 
-        return new DateTime(year, month, 1);
+        return new DateOnly(year, month, 1);
     }
 
     public void MoveToNextMonth()
@@ -73,9 +73,9 @@ public class DatePicker
         _leftArrow.Click();
     }
 
-    public void GoToYearAndMonth(DateTime dateTime)
+    public void GoToYearAndMonth(DateOnly dateTime)
     {
-        DateTime currentDateTime = GetCurrentYearAndMonth();
+        DateOnly currentDateTime = GetCurrentYearAndMonth();
         int monthDifference = currentDateTime.MonthDifference(dateTime);
         IWebElement button = monthDifference > 0 ? _rightArrow : _leftArrow;
         monthDifference = (int)MathF.Abs(monthDifference);
@@ -99,14 +99,14 @@ public class DatePicker
         GetDayButton(day).Click();
     }
 
-    public bool TryGetFirstAvaliableDay(out DateTime dateTime, DateTime from, DateTime before)
+    public bool TryGetFirstAvaliableDay(out DateOnly dateTime, DateOnly from, DateOnly before)
     {
         if(from >= before)
         {
             dateTime = before;
             return false;
         }
-        DateTime current = from;
+        DateOnly current = from;
         GoToYearAndMonth(from);
         while(current < before)
         {
@@ -128,16 +128,16 @@ public class DatePicker
         return false;
     }
 
-    public bool TryGetFirstAvaliableDayInCurrentMonth(out DateTime dateTime, int fromDay = 1, int beforeDay = 32)
+    public bool TryGetFirstAvaliableDayInCurrentMonth(out DateOnly dateTime, int fromDay = 1, int beforeDay = 32)
     {
-        DateTime currentYearAndMonth = GetCurrentYearAndMonth();
+        DateOnly currentYearAndMonth = GetCurrentYearAndMonth();
         int daysInMonth = DateTime.DaysInMonth(currentYearAndMonth.Year, currentYearAndMonth.Month);
         for(int i = fromDay - 1; i < daysInMonth && i < beforeDay - 1; i++)
         {
             int day = i + 1;
             if(IsDayAvaliable(day))
             {
-                dateTime = new DateTime(currentYearAndMonth.Year, currentYearAndMonth.Month, day);
+                dateTime = new DateOnly(currentYearAndMonth.Year, currentYearAndMonth.Month, day);
                 return true;
             }
         }

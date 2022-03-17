@@ -17,7 +17,7 @@ public class DriverWithDialogs
 
     public DriverWithDialogs()
     {
-        _logger = new($"[{this.GetType().Name}] ");
+        _logger = new(GetType().Name);
     }
     public DriverWithDialogs(IWebDriver driver) : this()
     {

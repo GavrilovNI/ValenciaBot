@@ -2,6 +2,7 @@
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Support.UI;
 using System.Globalization;
+using ValenciaBot.DateTimeExtensions;
 using ValenciaBot.WebDriverExtensions;
 
 namespace ValenciaBot;
@@ -14,49 +15,53 @@ public class AppointmentCreator : DriverWithDialogs
 
     private const int _minTimeZone = -12; // min world time zone
 
+    public AppointmentCreator()
+    {
+        _logger.Log($"Start");
+    }
 
-    public DateTime? GetFirstAvaliableDate(string service,
+    public DateOnly? GetFirstAvaliableDate(string service,
                                            string center,
-                                           DateTime beforeDate)
+                                           DateOnly beforeDate)
     {
         if(Opened == false)
             throw new InvalidOperationException(nameof(AppointmentCreator) + " is not opened.");
 
         _logger.StartMethod(service, center, beforeDate);
 
-        DateTime? result = null;
+        DateOnly? result = null;
         SelectService(service);
         if(TrySelectCenter(center))
         {
             _datePicker!.Open();
-            bool found = _datePicker.TryGetFirstAvaliableDay(out DateTime dateTime, DateTime.UtcNow.AddHours(_minTimeZone), beforeDate);
+            bool found = _datePicker.TryGetFirstAvaliableDay(out DateOnly dateTime, DateTime.UtcNow.AddHours(_minTimeZone).ToDateOnly(), beforeDate);
             _datePicker!.Close();
 
             result = found ? dateTime : null;
         }
 
-        _logger.StopMethod(result);
+        _logger.StopMethod(result!);
 
         return result;
     }
 
     public bool CreateAppointment(string service,
                                   string center,
-                                  DateTime beforeDate,
+                                  DateOnly beforeDate,
                                   string name,
                                   string surname,
                                   string documentType,
                                   string document,
                                   string phoneNumber,
                                   string email,
-                                  out DateTime createdTime)
+                                  out DateTime appointmentDateTime)
     {
         if(Opened == false)
             throw new InvalidOperationException(nameof(AppointmentCreator) + " is not opened.");
 
         _logger.StartMethod(service, center, beforeDate, name, surname, documentType, document, phoneNumber, email);
 
-        createdTime = beforeDate;
+        appointmentDateTime = beforeDate.ToDateTime();
 
         try
         {
@@ -67,7 +72,7 @@ public class AppointmentCreator : DriverWithDialogs
                 return false;
             }
 
-            DateTime? firstAvaliableDay = GetFirstAvaliableDate(service, center, beforeDate);
+            DateOnly? firstAvaliableDay = GetFirstAvaliableDate(service, center, beforeDate);
             if(firstAvaliableDay == null)
             {
                 _logger.StopMethod(false);
@@ -79,9 +84,8 @@ public class AppointmentCreator : DriverWithDialogs
                 _datePicker!.PickDay(firstAvaliableDay.Value.Day);
                 _datePicker!.Close();
             }
-            DateTime dateTime = firstAvaliableDay.Value;
-
-            DateTime selectedTime = SelectTime(1); // 0 - none; 1,2,3... avaliable times
+            DateOnly choosenDate = firstAvaliableDay.Value;
+            TimeOnly selectedTime = SelectTime(1); // 0 - none; 1,2,3... avaliable times
 
             SetName(name, surname);
             SelectDocumentType(documentType);
@@ -89,17 +93,11 @@ public class AppointmentCreator : DriverWithDialogs
             SetPhoneNumber(phoneNumber);
             SetEmail(email);
 
-            if(TrySubmit() == false)
-            {
-                _logger.StopMethod(false);
-                return false;
-            }
+            appointmentDateTime = choosenDate.ToDateTime(selectedTime);
 
-            createdTime = new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, selectedTime.Hour, selectedTime.Minute, 1);
-
-
-            _logger.StopMethod(true , createdTime);
-            return true;
+            var result = TrySubmit();
+            _logger.StopMethod(result, appointmentDateTime);
+            return result;
         }
         catch (Exception ex)
         {
@@ -180,15 +178,15 @@ public class AppointmentCreator : DriverWithDialogs
         return result;
     }
 
-    private DateTime SelectTime(int index)
+    private TimeOnly SelectTime(int index)
     {
         _logger.StartMethod(index);
 
         SelectElement timeSelector = _driver!.GetSelector(By.Id("hora"));
         timeSelector.SelectByIndex(index);
         var time = timeSelector.Options[index].GetAttribute("label");
-
-        var result = DateTime.ParseExact(time, "HH:mm", CultureInfo.InvariantCulture);
+        
+        var result = TimeOnly.ParseExact(time, "HH:mm", CultureInfo.InvariantCulture);
         _logger.StopMethod(result);
         return result;
     }
@@ -254,7 +252,7 @@ public class AppointmentCreator : DriverWithDialogs
         IWebElement submitButton = _driver!.FindElement(By.XPath("//*[@id=\"appointmentForm\"]/div[20]/div/button[1]"));
         submitButton.Submit();
 
-        var result = TryGetInfoDialog(out Dialog? dialog);
+        var result = TryGetInfoDialog(out Dialog? dialog) == false;
         _logger.StopMethod(result);
         return result;
     }

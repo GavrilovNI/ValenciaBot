@@ -11,7 +11,7 @@ public class Appointment : DriverWithDialogs
 {
     private IWebElement _appointment;
 
-    public DateTime Time
+    public DateTime DateTime
     {
         get
         {

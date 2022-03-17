@@ -25,9 +25,9 @@ public class ClassLogger : ILogger
     private string _prefix;
     private int _startFrameCount;
 
-    public ClassLogger(string prefix)
+    public ClassLogger(string className)
     {
-        _prefix = prefix;
+        _prefix = $"[{className}] ";
         _startFrameCount = new StackTrace().FrameCount;
     }
 
@@ -47,12 +47,12 @@ public class ClassLogger : ILogger
         stringBuilder.Append(tab);
         stringBuilder.Append($"Starting Method '{method.Name}'");
         for(int i = 0; i < args.Length; i++)
-            stringBuilder.Append($" arg{i} '{args[i]}'");
+            stringBuilder.Append($" arg-{i} '{args[i]}'");
 
         Logger.Log(stringBuilder.ToString());
     }
 
-    public void StopMethod(params object[] results)
+    public void StopMethod(params object?[] results)
     {
         StackTrace stackTrace = new();
         MethodBase method = stackTrace.GetFrame(1)!.GetMethod()!;
@@ -71,7 +71,7 @@ public class ClassLogger : ILogger
         {
             stringBuilder.Append($"Method '{method.Name}' finished with results");
             for(int i = 0; i < results.Length; i++)
-                stringBuilder.Append($" result{i} '{results[i]}'");
+                stringBuilder.Append($" result-{i} '{results[i] ?? "null"}'");
         }
 
         Logger.Log(stringBuilder.ToString());
@@ -81,7 +81,7 @@ public class ClassLogger : ILogger
 
 public class ConsoleLogger : ILogger
 {
-    public void Log(string message) => Console.WriteLine($"{DateTime.UtcNow.ToString("[HH:mm:ss] ")}------------" + message + '.');
+    public void Log(string message) => Console.WriteLine($"{DateTime.UtcNow.ToString("[HH:mm:ss UTC] ")}------------" + message + '.');
     public void LogWarning(string message) => Log("Warning: " + message);
     public void LogError(string message) => Log("Error: " + message);
 }
@@ -97,7 +97,7 @@ public class FileLogger : ILogger, IDisposable
     private int _maxLettersInFile;
     private int _lettersLogged;
 
-    public FileLogger(string path = "log.log", int maxLettersInFile = 10000, int logPeriodInseconds = 20)
+    public FileLogger(string path = "log.log", int maxLettersInFile = 100000, int logPeriodInseconds = 20)
     {
         _originalFilePath = path;
         Directory.CreateDirectory(Path.GetDirectoryName(_originalFilePath)!);
@@ -111,7 +111,7 @@ public class FileLogger : ILogger, IDisposable
         _timer.Start();
     }
 
-    public void Log(string message) => _logBuilder.Append($"{DateTime.UtcNow.ToString("[HH:mm:ss] ")}{message}\n");
+    public void Log(string message) => _logBuilder.Append($"{DateTime.UtcNow.ToString("[HH:mm:ss UTC] ")}{message}\n");
     public void LogWarning(string message) => Log("Warning: " + message);
     public void LogError(string message) => Log("Error: " + message);
 
@@ -139,7 +139,7 @@ public class FileLogger : ILogger, IDisposable
         _timer.Stop();
         string newLog = _logBuilder.ToString();
 
-        if(_lettersLogged + newLog.Length > _maxLettersInFile)
+        if(_lettersLogged != 0 && _lettersLogged + newLog.Length > _maxLettersInFile)
             SetupNewFile();
 
         File.AppendAllText(_filePath, newLog);
