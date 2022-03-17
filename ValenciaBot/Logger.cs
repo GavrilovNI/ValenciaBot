@@ -23,7 +23,7 @@ public class Logger
 public class ClassLogger : ILogger
 {
     private readonly string _prefix;
-    private readonly int _startFrameCount;
+    private int _startFrameCount;
 
     public ClassLogger(string className)
     {
@@ -40,6 +40,11 @@ public class ClassLogger : ILogger
         StackTrace stackTrace = new();
         MethodBase method = stackTrace.GetFrame(1)!.GetMethod()!;
         int tabSize = stackTrace.FrameCount - _startFrameCount;
+        if(tabSize < 0)
+        {
+            _startFrameCount += tabSize;
+            tabSize = 0;
+        }
 
         string tab = new(' ', tabSize);
         StringBuilder stringBuilder = new();

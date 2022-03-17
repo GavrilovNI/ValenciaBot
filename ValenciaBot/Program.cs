@@ -11,28 +11,72 @@ namespace ValenciaBot;
 
 public class Program
 {
+    public static readonly string LogPath = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\logs\\log.log";
+    private static readonly ClassLogger _logger = new(nameof(Program));
+
+    private static Program[] _programs = Array.Empty<Program>();
+    public static Program[] Programs => _programs;
+    
+    private static readonly string _telegramBotSunscribersFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\botSubs.txt";
+    private static readonly string _telegramBotTokenFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\telegramBotToken.txt";
+
+    private static TelegramBot? _bot;
+
+    private static void CreateTelegramBot()
+    {
+        string telegramBotTokenFileFullPath = Path.GetFullPath(_telegramBotTokenFile);
+        if(File.Exists(telegramBotTokenFileFullPath))
+        {
+            string botToken = File.ReadAllLines(telegramBotTokenFileFullPath)[0];
+            _bot = string.IsNullOrEmpty(botToken) ? null : new TelegramBot(botToken, _telegramBotSunscribersFile);
+            if(_bot == null)
+                _logger.LogWarning("Telegram bot was not created. Token inside token file not found. It should be placed on first line");
+            else
+                _logger.Log($"Telegram bot created. Token: '{botToken}'");
+        }
+        else
+        {
+            _logger.LogWarning("Telegram bot was not created. Token file not found");
+        }
+    }
+
     public static void Main()
     {
-        Program program = new();
-        program.Start();
+        CreateTelegramBot();
+
+        //Program testprogram = new("ATENCION ESPECIALIZADA-LICENCIAS, INOCUAS,CONTENEDORES", "JUNTA DE DISTRITO ABASTOS");
+        _programs = new Program[]
+        {
+            new Program("PADRON CP - Periodista Azzati", "PADRON Periodista Azzati 2"),
+            new Program("PADRON CP - OAC Tabacalera", "OAC TABACALERA"),
+            new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO ABASTOS"),
+            new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO MARITIMO"),
+            new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO TRANSITS"),
+        };
+
+        _bot?.SendMessageToSubscribers("Bot started.");
+        foreach (Program program in Programs)
+            program.Start();
         Console.ReadKey();
-        program.Stop();
+        foreach(Program program in Programs)
+            program.Stop();
+        _bot?.SendMessageToSubscribers("Bot stopped.");
     }
-    public static readonly string LogPath = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\logs\\log.log";
-    private readonly ClassLogger _logger = new(nameof(Program));
 
-    //private string _service = "ATENCION ESPECIALIZADA-LICENCIAS, INOCUAS,CONTENEDORES";
-    //private string _center = "JUNTA DE DISTRITO ABASTOS";
+    public string Service => _service;
+    public string Center => _center;
 
-    private static readonly string _service = "PADRON CP - Periodista Azzati";
-    private static readonly string _center = "PADRON Periodista Azzati 2";
+    private readonly string _service;
+    private readonly string _center;
     private readonly DateOnly _beforeDateOriginal = new(2022, 6, 13);
     private readonly string _name = "Name";
     private readonly string _surname = "Surname";
     private readonly string _documentType = "Pasaporte";
-    private readonly string _document = "761234567";
+    private string _document = "761234567";
     private readonly string _phoneNumber = "681123456";
     private readonly string _email = "email@email.com";
+
+    private readonly bool _increaseDocument = true;
 
     private Appointments? _appointments;
     private AppointmentCreator? _creator;
@@ -41,14 +85,22 @@ public class Program
     private System.Timers.Timer? _timer = null;
     public bool Running => _timer != null;
 
-    public static DateTime? ExistingAppointment { get; private set; } = null;
+    public DateTime? ExistingAppointment { get; private set; } = null;
 
     private DateOnly BeforeDate => ExistingAppointment.HasValue ? ExistingAppointment.Value.ToDateOnly() : _beforeDateOriginal;
 
-    private readonly string _telegramBotSunscribersFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\botSubs.txt";
-    private readonly string _telegramBotTokenFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\telegramBotToken.txt";
+    public Program(string service, string center)
+    {
+        _logger.Log($"Program created. Service: '{service}'. Center: '{center}'");
+        _service = service;
+        _center = center;
+    }
 
-    private TelegramBot? _bot;
+    private void ChangeDocument(string document)
+    {
+        _document = document;
+        _appointments?.ChangeDocument(document);
+    }
 
     private bool TryCreateBetterAppointment()
     {
@@ -82,14 +134,16 @@ public class Program
                 if(created)
                 {
                     ExistingAppointment = createdTime;
-                    _bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}.");
-                    _logger.StopMethod(true, "----Created new appointment----", createdTime);
+                    _bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}. Document : {_document}. Service: '{_service}'. Center: '{_center}'.");
+                    _logger.StopMethod(true, "----Created new appointment----", createdTime, _document, _service, _center);
+                    if(_increaseDocument)
+                        ChangeDocument((long.Parse(_document) + 1).ToString());
                     return true;
                 }
                 else
                 {
                     _bot?.SendMessageToSubscribers($"Error: Appointment was not created but time found. Found time: {avaliableDate}.");
-                    _logger.StopMethod(true, "----Appointment was not created but time found----", avaliableDate);
+                    _logger.StopMethod(false, "----Appointment was not created but time found----", avaliableDate);
                     return false;
                 }
             }
@@ -116,8 +170,6 @@ public class Program
         _appointments!.Close();
         _creator!.Close();
 
-        _bot?.SendMessageToSubscribers("Bot stopped.");
-
         _logger.StopMethod();
     }
 
@@ -140,7 +192,7 @@ public class Program
             DateOnly existingAppointmentDate = existingAppointmentDateTime.Value.ToDateOnly();
             if(existingAppointmentDate < oldBeforeDate)
             {
-                _bot?.SendCurrentAppointmentInfoToSubscribers();
+                _bot?.SendCurrentAppointmentInfoToSubscribers(this);
                 _logger.StopMethod(true, $"Found already existing appointment with date {existingAppointmentDateTime}");
             }
             else
@@ -161,23 +213,6 @@ public class Program
         if(Running)
             return;
         _logger.StartMethod();
-
-        string telegramBotTokenFileFullPath = Path.GetFullPath(_telegramBotTokenFile);
-        if(File.Exists(telegramBotTokenFileFullPath))
-        {
-            string botToken = File.ReadAllLines(telegramBotTokenFileFullPath)[0];
-            _bot = string.IsNullOrEmpty(botToken) ? null : new TelegramBot(botToken, _telegramBotSunscribersFile);
-            if(_bot == null)
-                _logger.LogWarning("Telegram bot was not created. Token inside token file not found. It should be placed on first line");
-            else
-                _logger.Log($"Telegram bot created. Token: '{botToken}'");
-        }
-        else
-        {
-            _logger.LogWarning("Telegram bot was not created. Token file not found");
-        }
-
-        _bot?.SendMessageToSubscribers("Bot started.");
 
         _appointments = new Appointments(_document);
         _creator = new AppointmentCreator();

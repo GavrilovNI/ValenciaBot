@@ -13,13 +13,23 @@ public class Appointments : DriverWithDialogs
 {
     public bool Opened => _driver != null;
 
-    private readonly string _document = "761234567";
+    private string _document = "761234567";
 
 
     public Appointments(string document)
     {
         _logger.Log($"Start. Document: '{document}'");
         _document = document;
+    }
+
+    public void ChangeDocument(string document)
+    {
+        _document = document;
+        if(Opened)
+        {
+            Close();
+            Open();
+        }
     }
 
     private Appointment? GetAppointment(Predicate<Appointment> match)

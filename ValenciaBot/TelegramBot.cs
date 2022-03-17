@@ -49,15 +49,16 @@ public class TelegramBot : IDisposable
             await _client.SendTextMessageAsync(subscriber, message);
     }
 
-    public async void SendCurrentAppointmentInfoToSubscribers()
+    public async void SendCurrentAppointmentInfoToSubscribers(Program program)
     {
         foreach(var subscriber in _subscribers)
-            SendCurrentAppointmentInfoToSubscriber(subscriber);
+            SendCurrentAppointmentInfoToSubscriber(program, subscriber);
     }
 
-    private async void SendCurrentAppointmentInfoToSubscriber(long subscriberId)
+    private async void SendCurrentAppointmentInfoToSubscriber(Program program, long subscriberId)
     {
-        string currentAppointmentInfo = Program.ExistingAppointment == null ? "Now we have no appointment." : $"Current appointment date: {Program.ExistingAppointment}.";
+        string programInfo = $"Service: '{program.Service}'. Center: '{program.Center}'. ";
+        string currentAppointmentInfo = programInfo + (program.ExistingAppointment.HasValue ? $"Current appointment date: {program.ExistingAppointment}." : "Now we have no appointment.");
         await _client.SendTextMessageAsync(subscriberId, currentAppointmentInfo);
     }
 
@@ -100,7 +101,8 @@ public class TelegramBot : IDisposable
         bool added = AddSubscriber(subscriberId);
         string replyMessage = added ? "You have been subscribed!" : "You are already subscribed!";
         await _client.SendTextMessageAsync(subscriberId, replyMessage);
-        SendCurrentAppointmentInfoToSubscriber(subscriberId);
+        foreach(Program program in Program.Programs)
+            SendCurrentAppointmentInfoToSubscriber(program, subscriberId);
     }
 
     private static Task UnknownUpdateHandlerAsync(ITelegramBotClient botClient, Update update)
