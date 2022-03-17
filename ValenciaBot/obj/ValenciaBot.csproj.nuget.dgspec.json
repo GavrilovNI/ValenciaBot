@@ -51,6 +51,14 @@
             "Selenium.WebDriver.ChromeDriver": {
               "target": "Package",
               "version": "[99.0.4844.5100, )"
+            },
+            "Telegram.Bot": {
+              "target": "Package",
+              "version": "[17.0.0, )"
+            },
+            "Telegram.Bot.Extensions.Polling": {
+              "target": "Package",
+              "version": "[1.0.2, )"
             }
           },
           "imports": [

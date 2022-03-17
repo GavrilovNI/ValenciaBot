@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
 using ValenciaBot.DateTimeExtensions;
+using ValenciaBot.DirectoryExtensions;
 
 namespace ValenciaBot;
 
@@ -41,6 +42,11 @@ public class Program
     private System.Timers.Timer? _timer = null;
     public bool Running => _timer != null;
 
+    private string _telegramBotSunscribersFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\botSubs.txt";
+    private string _telegramBotToken = "";
+
+    private TelegramBot? _bot;
+
     private bool TryCreateBetterAppointment()
     {
         _logger.StartMethod();
@@ -52,25 +58,29 @@ public class Program
             DateOnly? avaliableDate = GetFirstAvaliableDate();
             if(avaliableDate != null)
             {
+                _bot?.SendMessageToSubscribers($"Found avaliable date {avaliableDate}");
                 if(hasOldAppointment && RemoveAppointmentByPoint() == false)
                 {
+                    _bot?.SendMessageToSubscribers("Error: Appointment was not removed. But it exists.");
                     _logger.StopMethod(false, "Appointment was not removed. But it exists");
                     return false;
                 }
                 bool created = CreateAppointment(out DateTime createdTime);
                 if(created)
                 {
+                    _bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}.");
                     _beforeDate = createdTime.ToDateOnly();
-                    _logger.StopMethod(true, "----Created new appointment----");
+                    _logger.StopMethod(true, "----Created new appointment----", createdTime);
                     return true;
                 }
                 else
                 {
-                    _logger.StopMethod(true, "----Appointment was not created but time found----");
+                    _bot?.SendMessageToSubscribers($"Error: Appointment was not created but time found. Found time: {avaliableDate}.");
+                    _logger.StopMethod(true, "----Appointment was not created but time found----", avaliableDate);
                     return false;
                 }
             }
-            _logger.StopMethod(true, "Date not found.");
+            _logger.StopMethod(true, "Date not found");
             return true;
         }
         catch(Exception ex)
@@ -129,6 +139,9 @@ public class Program
         if(Running)
             return;
         _logger.StartMethod();
+
+        _bot = string.IsNullOrEmpty(_telegramBotToken) ? null : new TelegramBot(_telegramBotToken, _telegramBotSunscribersFile);
+
         _appointments = new Appointments(_document);
         _creator = new AppointmentCreator();
 
