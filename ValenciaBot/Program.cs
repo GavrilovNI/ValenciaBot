@@ -14,7 +14,7 @@ public class Program
         new Program().Start();
         while(true)
         {
-            Console.ReadLine();
+            Console.ReadKey();
             return;
         }
     }
@@ -100,6 +100,7 @@ public class Program
         _appointments = new Appointments(_document);
         _creator = new AppointmentCreator();
 
+        Logger.Log($"Looking for old appointment before date {_beforeDate:dd:MM:yyyy}");
         DateTime? createdAppointmentTime = GetAppointmentDate();
         if(createdAppointmentTime != null)
         {
@@ -107,6 +108,11 @@ public class Program
             {
                 _beforeDate = createdAppointmentTime.Value;
                 Logger.Log($"Found already existing appointment with date {_beforeDate:dd:MM:yyyy}");
+            }
+            else
+            {
+                Logger.Log($"Old appointment before date {_beforeDate:dd:MM:yyyy} was not found");
+
             }
         }
 
@@ -162,6 +168,7 @@ public class Program
 
     private DateTime? GetFirstAvaliableDate()
     {
+        Logger.Log($"Getting first avliable date.");
         _creator!.Open();
         DateTime? dateTime = _creator.GetFirstAvaliableDate(_service, _center, _beforeDate);
         _creator.Close();

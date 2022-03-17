@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using ValenciaBot.PathExtensions;
 using ValenciaBot.DirectoryExtensions;
+using System.Diagnostics;
+using System.Reflection;
 
 namespace ValenciaBot;
 
@@ -17,6 +19,65 @@ public class Logger
     public static void LogWarning(string message) => _logger.LogWarning(message);
     public static void LogError(string message) => _logger.LogError(message);
 }
+
+public class ClassLogger : ILogger
+{
+    private string _prefix;
+    private int _startFrameCount;
+
+    public ClassLogger(string prefix)
+    {
+        _prefix = prefix;
+        _startFrameCount = new StackTrace().FrameCount;
+    }
+
+    public void Log(string message) => Logger.Log(_prefix + message);
+    public void LogError(string message) => Logger.LogError(_prefix + message);
+    public void LogWarning(string message) => Logger.LogWarning(_prefix + message);
+
+    public void StartMethod(params object[] args)
+    {
+        StackTrace stackTrace = new();
+        MethodBase method = stackTrace.GetFrame(1)!.GetMethod()!;
+        int tabSize = stackTrace.FrameCount - _startFrameCount;
+
+        string tab = new(' ', tabSize);
+        StringBuilder stringBuilder = new();
+        stringBuilder.Append(_prefix);
+        stringBuilder.Append(tab);
+        stringBuilder.Append($"Starting Method '{method.Name}'");
+        for(int i = 0; i < args.Length; i++)
+            stringBuilder.Append($" arg{i} '{args[i]}'");
+
+        Logger.Log(stringBuilder.ToString());
+    }
+
+    public void StopMethod(params object[] results)
+    {
+        StackTrace stackTrace = new();
+        MethodBase method = stackTrace.GetFrame(1)!.GetMethod()!;
+        MethodInfo? methodInfo = method as MethodInfo;
+        int tabSize = stackTrace.FrameCount - _startFrameCount;
+
+        string tab = new(' ', tabSize);
+        StringBuilder stringBuilder = new();
+        stringBuilder.Append(_prefix);
+        stringBuilder.Append(tab);
+        if(typeof(void) == methodInfo?.ReturnType && results.Length == 0)
+        {
+            stringBuilder.Append($"Method '{method.Name}' finished");
+        }
+        else
+        {
+            stringBuilder.Append($"Method '{method.Name}' finished with results");
+            for(int i = 0; i < results.Length; i++)
+                stringBuilder.Append($" result{i} '{results[i]}'");
+        }
+
+        Logger.Log(stringBuilder.ToString());
+    }
+}
+
 
 public class ConsoleLogger : ILogger
 {
@@ -31,19 +92,18 @@ public class FileLogger : ILogger, IDisposable
 
     private StringBuilder _logBuilder = new StringBuilder();
     private string _filePath;
+    private string _originalFilePath;
     private System.Timers.Timer _timer;
+    private int _maxLettersInFile;
+    private int _lettersLogged;
 
-    public FileLogger(string path = "log.log", bool addDateAndTimeTime = true, int logPeriodInseconds = 20)
+    public FileLogger(string path = "log.log", int maxLettersInFile = 10000, int logPeriodInseconds = 20)
     {
-        if(Path.HasExtension(path) == false)
-            path = Path.ChangeExtension(path, DefaultExtension);
-        if(addDateAndTimeTime)
-        {
-            string dateTime = DateTime.Now.ToString("yyyyMMdd-hhmmss");
-            path = PathExt.SetName(path, Path.GetFileNameWithoutExtension(path) + dateTime);
-        }
-        _filePath = Path.GetFullPath(path);
-        Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
+        _originalFilePath = path;
+        Directory.CreateDirectory(Path.GetDirectoryName(_originalFilePath)!);
+        SetupNewFile();
+
+        _maxLettersInFile = maxLettersInFile;
 
         _timer = new System.Timers.Timer(logPeriodInseconds * 1000);
         _timer.Elapsed += (o, a) => AppendToFile();
@@ -62,12 +122,29 @@ public class FileLogger : ILogger, IDisposable
         _timer.Dispose();
     }
 
-    public void AppendToFile()
+    private void SetupNewFile()
+    {
+        string dateTime = DateTime.Now.ToString("yyyyMMdd-hhmmss");
+        string path = PathExt.SetName(_originalFilePath, Path.GetFileNameWithoutExtension(_originalFilePath) + dateTime);
+
+        if(Path.HasExtension(path) == false)
+            path = Path.ChangeExtension(path, DefaultExtension);
+
+        _filePath = Path.GetFullPath(path);
+        _lettersLogged = 0;
+    }
+
+    private void AppendToFile()
     {
         _timer.Stop();
-        File.AppendAllText(_filePath, _logBuilder.ToString());
-        _logBuilder.Clear();
+        string newLog = _logBuilder.ToString();
 
+        if(_lettersLogged + newLog.Length > _maxLettersInFile)
+            SetupNewFile();
+
+        File.AppendAllText(_filePath, newLog);
+        _lettersLogged += newLog.Length;
+        _logBuilder.Clear();
         _timer.Start();
     }
 }

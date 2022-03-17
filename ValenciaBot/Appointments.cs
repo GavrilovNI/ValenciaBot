@@ -18,36 +18,56 @@ public class Appointments : DriverWithDialogs
 
     public Appointments(string document)
     {
+        _logger.Log($"Start document:{document}");
         _document = document;
     }
 
     private Appointment? GetAppointment(Predicate<Appointment> match)
     {
+        _logger.StartMethod(match);
         Appointment[] appointments = GetAllApointments();
         int index = Array.FindIndex(appointments, match);
-        return index < 0 ? null : appointments[index];
+        var result = index < 0 ? null : appointments[index];
+        _logger.StopMethod(result);
+        return result;
     }
 
     public Appointment? GetAppointment(string service, string center)
     {
-        Logger.Log($"Getting Appointment with service: '{service}' center: '{center}'");
-        return GetAppointment(a => a.Service == service && a.Center == center);
+        _logger.StartMethod(service, center);
+        var result = GetAppointment(a => a.Service == service && a.Center == center);
+        _logger.StopMethod(result);
+        return result;
     }
 
     private int GetAppointmentIndex(Predicate<Appointment> match)
     {
+        _logger.StartMethod(match);
         Appointment[] appointments = GetAllApointments();
-        return Array.FindIndex(appointments, match);
+        var result = Array.FindIndex(appointments, match);
+        _logger.StopMethod(result);
+        return result;
     }
 
-    public bool HasAppointment(Predicate<Appointment> match) =>
-        GetAppointmentIndex(match) >= 0;
+    public bool HasAppointment(Predicate<Appointment> match)
+    {
+        _logger.StartMethod(match);
+        bool result = GetAppointmentIndex(match) >= 0;
+        _logger.StopMethod(result);
+        return result;
+    }
 
-    public bool HasAppointment(string service, string center) =>
-        HasAppointment(a => a.Service == service && a.Center == center);
+    public bool HasAppointment(string service, string center)
+    {
+        _logger.StartMethod(service, center);
+        bool result = HasAppointment(a => a.Service == service && a.Center == center);
+        _logger.StopMethod(result);
+        return result;
+    }
 
     public Appointment[] GetAllApointments()
     {
+        _logger.StartMethod();
         List<Appointment> result = new();
         int i = 0;
         while(TryGetAppointment(i, out Appointment? appointment))
@@ -55,48 +75,56 @@ public class Appointments : DriverWithDialogs
             result.Add(appointment!);
             i++;
         }
-
+        _logger.StopMethod(result);
         return result.ToArray();
     }
 
     public bool TryRemoveAppointment(Predicate<Appointment> match)
     {
+        _logger.StartMethod(match);
         Appointment? appointment = GetAppointment(match);
         if(appointment == null)
         {
-            Logger.Log($"Appointment was not removed: not found");
+            _logger.StopMethod(false);
             return false;
         }
 
         appointment.Remove();
-        Logger.Log($"Appointment removed");
-
+        _logger.StopMethod(true);
         return true;
     }
 
     public bool TryRemoveAppointment(string service, string center)
     {
-        Logger.Log($"Trying to remove appointment with service: '{service}' center: '{center}'");
-        return TryRemoveAppointment(a => a.Service == service && a.Center == center);
+        _logger.StartMethod(service, center);
+        var result = TryRemoveAppointment(a => a.Service == service && a.Center == center);
+        _logger.StopMethod(result);
+        return result;
     }
 
     public bool TryRemoveAppointment(string service, string center, DateTime dateTime)
     {
-        Logger.Log($"Trying to remove appointment with service: '{service}' center: '{center}' dateTime: '{dateTime:mm:hh dd:MM:yyyy}'");
+        _logger.StartMethod(service, center, dateTime);
         bool timeMatch(DateTime time) => time.Year == dateTime.Year &&
                                         time.Month == dateTime.Month &&
                                         time.Day == dateTime.Day &&
                                         time.Hour == dateTime.Hour &&
                                         time.Minute == dateTime.Minute;
-        return TryRemoveAppointment(a => a.Service == service && a.Center == center && timeMatch(a.Time));
+        var result = TryRemoveAppointment(a => a.Service == service && a.Center == center && timeMatch(a.Time));
+        _logger.StopMethod(result);
+        return result;
     }
 
 
     public void Open()
     {
+        _logger.StartMethod();
         if(Opened)
+        {
+            _logger.Log("Browser is already opened. Closing");
             Close();
-        _driver = new ChromeDriver
+        }
+        _driver = new ChromeDriver()
         {
             Url = "http://www.valencia.es/QSIGE/apps/citaprevia/index.html#!/queryAppoinment"
         };
@@ -109,39 +137,49 @@ public class Appointments : DriverWithDialogs
         _driver.Wait(TimeoutForLoading);
 
         WaitLoading(out Dialog _);
+        _logger.StopMethod();
     }
-    
+
     public void Close()
     {
         if(Opened == false)
             return;
+        _logger.StartMethod();
         _driver!.Close();
         _driver = null;
+        _logger.StopMethod();
     }
 
     private void SetDocument(string document)
     {
+        _logger.StartMethod(document);
         IWebElement documentElement = _driver!.FindElement(By.Id("nif"));
         documentElement.SendKeys(document);
+        _logger.StopMethod();
     }
 
     private void SubmitDocument()
     {
+        _logger.StartMethod();
         IWebElement submitButton = _driver!.FindElement(By.XPath("html/body/div[2]/div/div[3]/div/div/div[1]/div[2]/form/div[3]/button"));
         submitButton.Submit();
+        _logger.StopMethod();
     }
 
     public bool TryGetAppointment(int index, out Appointment? appointment)
     {
+        _logger.StartMethod(index);
         try
         {
             IWebElement appointmentElement = _driver!.FindElement(By.XPath($"/html/body/div[2]/div/div[3]/div/div/div[2]/div[2]/table/tbody/tr[1]/td[{index + 1}]"));
             appointment = new Appointment(_driver, appointmentElement);
+            _logger.StopMethod(true, appointment);
             return true;
         }
         catch(NoSuchElementException)
         {
             appointment = null;
+            _logger.StopMethod(false);
             return false;
         }
     }
