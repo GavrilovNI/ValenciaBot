@@ -7,25 +7,23 @@ namespace ValenciaBot;
 
 public class DatePicker
 {
-    private IWebDriver _driver;
-    private IWebElement _showCalendarButton;
-    private IWebElement _dropdown;
+    private readonly IWebElement _showCalendarButton;
+    private readonly IWebElement _dropdown;
 
-    private IWebElement _table;
+    private readonly IWebElement _table;
 
-    private IWebElement _yearAndMonthButton;
-    private IWebElement _leftArrow;
-    private IWebElement _rightArrow;
+    private readonly IWebElement _yearAndMonthButton;
+    private readonly IWebElement _leftArrow;
+    private readonly IWebElement _rightArrow;
 
     public bool IsOpen => _dropdown.GetAttribute("className") == "dropdown open";
 
     private (int x, int y) _calendarSize = (7, 6);
 
-    private string[] _monthAbbreviations = new string[12] { "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic" };
+    private readonly string[] _monthAbbreviations = new string[12] { "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic" };
 
-    public DatePicker(IWebDriver driver, IWebElement showCalendarButton, IWebElement dropdown)
+    public DatePicker(IWebElement showCalendarButton, IWebElement dropdown)
     {
-        _driver = driver;
         _showCalendarButton = showCalendarButton;
         _dropdown = dropdown;
 
@@ -50,7 +48,7 @@ public class DatePicker
     public DateOnly GetCurrentYearAndMonth()
     {
         string stringDate = _yearAndMonthButton.Text;
-        string stringYear = stringDate.Substring(0, 4);
+        string stringYear = stringDate[..4];
         string stringMonth = stringDate.Substring(5, 3);
 
         int year = int.Parse(stringYear);
@@ -94,7 +92,13 @@ public class DatePicker
         return _table.FindElement(By.XPath($"tbody/tr[{y + 1}]/td[{x + 1}]"));
     }
 
-    public void PickDay(int day)
+    public void PickDay(DateOnly dateOnly)
+    {
+        GoToYearAndMonth(dateOnly);
+        GetDayButton(dateOnly.Day).Click();
+    }
+
+    private void PickDay(int day)
     {
         GetDayButton(day).Click();
     }
@@ -155,6 +159,12 @@ public class DatePicker
         int x = (firstX + day) % _calendarSize.x;
         int y = firstY + (firstX + day) / _calendarSize.x;
         return (x, y);
+    }
+
+    public bool IsDayAvaliable(DateOnly dateOnly)
+    {
+        GoToYearAndMonth(dateOnly);
+        return IsDayAvaliable(dateOnly.Day);
     }
 
     private bool IsDayAvaliable(int day)

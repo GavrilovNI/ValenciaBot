@@ -1,15 +1,10 @@
 ﻿using OpenQA.Selenium;
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ValenciaBot;
 public class Appointment : DriverWithDialogs
 {
-    private IWebElement _appointment;
+    private readonly IWebElement _appointment;
 
     public DateTime DateTime
     {
@@ -24,7 +19,7 @@ public class Appointment : DriverWithDialogs
         get
         {
             string center = _appointment.FindElement(By.XPath("p[2]")).Text;
-            center = center.Substring("Centre: ".Length);
+            center = center["Centre: ".Length..];
             return center;
         }
     }
@@ -33,7 +28,7 @@ public class Appointment : DriverWithDialogs
         get
         {
             string service = _appointment.FindElement(By.XPath("p[3]")).Text;
-            service = service.Substring("Servici: ".Length);
+            service = service["Servici: ".Length..];
             return service;
         }
     }

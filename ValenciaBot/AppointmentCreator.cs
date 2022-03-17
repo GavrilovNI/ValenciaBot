@@ -45,6 +45,71 @@ public class AppointmentCreator : DriverWithDialogs
         return result;
     }
 
+    public bool CreateAppointmentByExactDate(string service,
+                                  string center,
+                                  DateOnly exactDate,
+                                  string name,
+                                  string surname,
+                                  string documentType,
+                                  string document,
+                                  string phoneNumber,
+                                  string email,
+                                  out DateTime appointmentDateTime)
+    {
+        if(Opened == false)
+            throw new InvalidOperationException(nameof(AppointmentCreator) + " is not opened.");
+
+        _logger.StartMethod(service, center, exactDate, name, surname, documentType, document, phoneNumber, email);
+
+        appointmentDateTime = exactDate.ToDateTime();
+
+        try
+        {
+            SelectService(service);
+            if(TrySelectCenter(center) == false)
+            {
+                _logger.StopMethod(false);
+                return false;
+            }
+            _datePicker!.Open();
+            bool dayAvaliable = _datePicker!.IsDayAvaliable(exactDate);
+            if(dayAvaliable)
+            {
+                _datePicker!.PickDay(exactDate);
+            }
+            else
+            {
+                _logger.StopMethod(false, "Day is not avaliable");
+                return false;
+            }
+
+            DateOnly choosenDate = exactDate;
+            TimeOnly selectedTime = SelectTime(1); // 0 - none; 1,2,3... avaliable times
+
+            SetName(name, surname);
+            SelectDocumentType(documentType);
+            SetDocument(document);
+            SetPhoneNumber(phoneNumber);
+            SetEmail(email);
+
+            appointmentDateTime = choosenDate.ToDateTime(selectedTime);
+
+            var result = TrySubmit();
+            _logger.StopMethod(result, appointmentDateTime);
+            return result;
+        }
+        catch(Exception ex)
+        {
+            _logger.StopMethod(false, ex);
+            _logger.LogError("Exception while creating record: " + ex.Message + " " + ex.StackTrace);
+            return false;
+        }
+        finally
+        {
+            Close();
+        }
+    }
+
     public bool CreateAppointment(string service,
                                   string center,
                                   DateOnly beforeDate,
@@ -65,13 +130,6 @@ public class AppointmentCreator : DriverWithDialogs
 
         try
         {
-            SelectService(service);
-            if(TrySelectCenter(center) == false)
-            {
-                _logger.StopMethod(false);
-                return false;
-            }
-
             DateOnly? firstAvaliableDay = GetFirstAvaliableDate(service, center, beforeDate);
             if(firstAvaliableDay == null)
             {
@@ -80,24 +138,8 @@ public class AppointmentCreator : DriverWithDialogs
             }
             else
             {
-                _datePicker!.Open();
-                _datePicker!.PickDay(firstAvaliableDay.Value.Day);
-                _datePicker!.Close();
+                return CreateAppointmentByExactDate(service, center, firstAvaliableDay.Value, name, surname, documentType, document, phoneNumber, email, out appointmentDateTime);
             }
-            DateOnly choosenDate = firstAvaliableDay.Value;
-            TimeOnly selectedTime = SelectTime(1); // 0 - none; 1,2,3... avaliable times
-
-            SetName(name, surname);
-            SelectDocumentType(documentType);
-            SetDocument(document);
-            SetPhoneNumber(phoneNumber);
-            SetEmail(email);
-
-            appointmentDateTime = choosenDate.ToDateTime(selectedTime);
-
-            var result = TrySubmit();
-            _logger.StopMethod(result, appointmentDateTime);
-            return result;
         }
         catch (Exception ex)
         {
@@ -151,7 +193,7 @@ public class AppointmentCreator : DriverWithDialogs
         IWebElement showCalendarButton = _driver!.FindElement(By.XPath("//*[@id=\"datetimepicker2\"]/div/button"));
         IWebElement dropdown = _driver!.FindElement(By.XPath("//*[@id=\"appointmentForm\"]/div[7]/div/div"));
 
-        _datePicker = new DatePicker(_driver, showCalendarButton, dropdown);
+        _datePicker = new DatePicker(showCalendarButton, dropdown);
 
         _logger.StopMethod();
     }
@@ -173,7 +215,7 @@ public class AppointmentCreator : DriverWithDialogs
         SelectElement centerSelector = _driver!.GetSelector(By.Id("centros"));
         centerSelector.SelectByText(text);
 
-        var result = TryGetInfoDialog(out Dialog? dialog) == false;
+        var result = TryGetInfoDialog(out Dialog? _) == false;
         _logger.StopMethod(result);
         return result;
     }
@@ -252,7 +294,7 @@ public class AppointmentCreator : DriverWithDialogs
         IWebElement submitButton = _driver!.FindElement(By.XPath("//*[@id=\"appointmentForm\"]/div[20]/div/button[1]"));
         submitButton.Submit();
 
-        var result = TryGetInfoDialog(out Dialog? dialog) == false;
+        var result = TryGetInfoDialog(out Dialog? _) == false;
         _logger.StopMethod(result);
         return result;
     }

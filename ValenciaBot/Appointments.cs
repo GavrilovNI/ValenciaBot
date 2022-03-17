@@ -131,6 +131,15 @@ public class Appointments : DriverWithDialogs
 
         _driver.Wait(TimeoutForLoading);
 
+        IWebElement phoneElement = _driver.FindElement(By.Id("txtTelefono"));
+        IWebElement phoneElementParent2 = _driver.GetElementParent(phoneElement, 2)!;
+
+        if(phoneElementParent2.GetAttribute("className") != "form-group ng-hide")
+        {
+            _logger.LogError("Appointments page loaded wrong");
+            throw new Exception("Appointments page loaded wrong.");
+        }
+
         SetDocument(_document);
         SubmitDocument();
 

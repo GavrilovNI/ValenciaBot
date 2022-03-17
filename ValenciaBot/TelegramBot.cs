@@ -49,6 +49,18 @@ public class TelegramBot : IDisposable
             await _client.SendTextMessageAsync(subscriber, message);
     }
 
+    public async void SendCurrentAppointmentInfoToSubscribers()
+    {
+        foreach(var subscriber in _subscribers)
+            SendCurrentAppointmentInfoToSubscriber(subscriber);
+    }
+
+    private async void SendCurrentAppointmentInfoToSubscriber(long subscriberId)
+    {
+        string currentAppointmentInfo = Program.ExistingAppointment == null ? "Now we have no appointment." : $"Current appointment date: {Program.ExistingAppointment}.";
+        await _client.SendTextMessageAsync(subscriberId, currentAppointmentInfo);
+    }
+
     public void Dispose() => _cancellationToken.Cancel();
 
     public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
@@ -84,9 +96,11 @@ public class TelegramBot : IDisposable
 
     private async Task BotOnMessageReceived(ITelegramBotClient botClient, Message message)
     {
-        bool added = AddSubscriber(message.Chat.Id);
+        long subscriberId = message.Chat.Id;
+        bool added = AddSubscriber(subscriberId);
         string replyMessage = added ? "You have been subscribed!" : "You are already subscribed!";
-        await _client.SendTextMessageAsync(message.Chat.Id, replyMessage);
+        await _client.SendTextMessageAsync(subscriberId, replyMessage);
+        SendCurrentAppointmentInfoToSubscriber(subscriberId);
     }
 
     private static Task UnknownUpdateHandlerAsync(ITelegramBotClient botClient, Update update)

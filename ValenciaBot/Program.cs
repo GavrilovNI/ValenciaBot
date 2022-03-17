@@ -13,38 +13,40 @@ public class Program
 {
     public static void Main()
     {
-        new Program().Start();
-        while(true)
-        {
-            Console.ReadKey();
-            return;
-        }
+        Program program = new();
+        program.Start();
+        Console.ReadKey();
+        program.Stop();
     }
     public static readonly string LogPath = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\logs\\log.log";
-    private ClassLogger _logger = new ClassLogger(nameof(Program));
+    private readonly ClassLogger _logger = new(nameof(Program));
 
     //private string _service = "ATENCION ESPECIALIZADA-LICENCIAS, INOCUAS,CONTENEDORES";
     //private string _center = "JUNTA DE DISTRITO ABASTOS";
 
     private static readonly string _service = "PADRON CP - Periodista Azzati";
     private static readonly string _center = "PADRON Periodista Azzati 2";
-    private DateOnly _beforeDate = new DateOnly(2022, 6, 13);
-    private string _name = "Name";
-    private string _surname = "Surname";
-    private string _documentType = "Pasaporte";
-    private string _document = "761234567";
-    private string _phoneNumber = "681123456";
-    private string _email = "email@email.com";
+    private readonly DateOnly _beforeDateOriginal = new(2022, 6, 13);
+    private readonly string _name = "Name";
+    private readonly string _surname = "Surname";
+    private readonly string _documentType = "Pasaporte";
+    private readonly string _document = "761234567";
+    private readonly string _phoneNumber = "681123456";
+    private readonly string _email = "email@email.com";
 
     private Appointments? _appointments;
     private AppointmentCreator? _creator;
 
-    private int _delayInSeconds = 60;
+    private readonly int _delayInSeconds = 60;
     private System.Timers.Timer? _timer = null;
     public bool Running => _timer != null;
 
-    private string _telegramBotSunscribersFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\botSubs.txt";
-    private string _telegramBotTokenFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\telegramBotToken.txt";
+    public static DateTime? ExistingAppointment { get; private set; } = null;
+
+    private DateOnly BeforeDate => ExistingAppointment.HasValue ? ExistingAppointment.Value.ToDateOnly() : _beforeDateOriginal;
+
+    private readonly string _telegramBotSunscribersFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\botSubs.txt";
+    private readonly string _telegramBotTokenFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\telegramBotToken.txt";
 
     private TelegramBot? _bot;
 
@@ -53,24 +55,34 @@ public class Program
         _logger.StartMethod();
         try
         {
-            bool hasOldAppointment = LookForAlreadyCreatedAppointment();
             _logger.Log("Trying to create better appointment");
+            bool hasOldAppointment = LookForAlreadyCreatedAppointment(true, false);
+            if(hasOldAppointment == false)
+                _appointments!.Close();
 
-            DateOnly? avaliableDate = GetFirstAvaliableDate();
-            if(avaliableDate != null)
+            DateOnly? avaliableDate = GetFirstAvaliableDate(true, false);
+            if(avaliableDate is null)
+            {
+                _appointments!.Close();
+                _creator!.Close();
+                //_bot?.SendMessageToSubscribers("Better date not found.");
+                _logger.StopMethod(true, "Better date not found");
+                return true;
+            }
+            else
             {
                 _bot?.SendMessageToSubscribers($"Found avaliable date {avaliableDate}");
-                if(hasOldAppointment && RemoveAppointmentByPoint() == false)
+                if(hasOldAppointment && RemoveAppointmentByPoint(false, true) == false)
                 {
                     _bot?.SendMessageToSubscribers("Error: Appointment was not removed. But it exists.");
                     _logger.StopMethod(false, "Appointment was not removed. But it exists");
                     return false;
                 }
-                bool created = CreateAppointment(out DateTime createdTime);
+                bool created = CreateAppointmentByExactDate(avaliableDate.Value, out DateTime createdTime, false, true);
                 if(created)
                 {
+                    ExistingAppointment = createdTime;
                     _bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}.");
-                    _beforeDate = createdTime.ToDateOnly();
                     _logger.StopMethod(true, "----Created new appointment----", createdTime);
                     return true;
                 }
@@ -81,8 +93,6 @@ public class Program
                     return false;
                 }
             }
-            _logger.StopMethod(true, "Date not found");
-            return true;
         }
         catch(Exception ex)
         {
@@ -106,33 +116,44 @@ public class Program
         _appointments!.Close();
         _creator!.Close();
 
+        _bot?.SendMessageToSubscribers("Bot stopped.");
+
         _logger.StopMethod();
     }
 
-    private bool LookForAlreadyCreatedAppointment()
+    private bool LookForAlreadyCreatedAppointment(bool reOpen = true, bool close = true)
     {
-        _logger.StartMethod(_beforeDate);
-        DateTime? createdAppointmentDateTime = GetAppointmentDateTime();
-        if(createdAppointmentDateTime != null)
+        _logger.StartMethod(BeforeDate);
+        DateTime? existingAppointmentDateTime = GetAppointmentDateTime(reOpen, close);
+
+        if(existingAppointmentDateTime is null && ExistingAppointment is not null)
         {
-            DateOnly createdAppointmentDate = createdAppointmentDateTime.Value.ToDateOnly();
-            if(createdAppointmentDate < _beforeDate)
+            _bot?.SendMessageToSubscribers("Warning: Existing appointment was removed since last check.");
+            _logger.StopMethod(true, $"Existing appointment was removed since last check");
+        }
+
+        DateOnly oldBeforeDate = BeforeDate;
+        ExistingAppointment = existingAppointmentDateTime;
+
+        if(existingAppointmentDateTime != null)
+        {
+            DateOnly existingAppointmentDate = existingAppointmentDateTime.Value.ToDateOnly();
+            if(existingAppointmentDate < oldBeforeDate)
             {
-                _beforeDate = createdAppointmentDate;
-                _logger.StopMethod(true, $"Found already existing appointment with date {_beforeDate}");
-                return true;
+                _bot?.SendCurrentAppointmentInfoToSubscribers();
+                _logger.StopMethod(true, $"Found already existing appointment with date {existingAppointmentDateTime}");
             }
             else
             {
-                _logger.StopMethod(true, $"Old appointment before date {_beforeDate} was not found. Found appointment date: {createdAppointmentDate}");
-                return true;
+                _logger.StopMethod(true, $"Old appointment before date {oldBeforeDate} was not found. Found appointment date: {existingAppointmentDate}");
             }
         }
         else
         {
             _logger.StopMethod(false, "Old appointment was not found");
-            return false;
         }
+
+        return ExistingAppointment is not null;
     }
 
     public void Start()
@@ -155,6 +176,8 @@ public class Program
         {
             _logger.LogWarning("Telegram bot was not created. Token file not found");
         }
+
+        _bot?.SendMessageToSubscribers("Bot started.");
 
         _appointments = new Appointments(_document);
         _creator = new AppointmentCreator();
@@ -188,62 +211,87 @@ public class Program
         _logger.StopMethod();
     }
 
-    private DateTime? GetAppointmentDateTime()
+    private DateTime? GetAppointmentDateTime(bool reOpen = true, bool close = true)
     {
         _logger.StartMethod();
 
-        _appointments!.Open();
-        Appointment? appointment = _appointments.GetAppointment(_service, _center);
+        if(reOpen)
+            _appointments!.Open();
+        Appointment? appointment = _appointments!.GetAppointment(_service, _center);
         DateTime? result = appointment?.DateTime;
-        _appointments.Close();
+        if(close)
+            _appointments.Close();
 
         _logger.StopMethod(result);
         return result;
     }
 
-    private bool HasAppointment()
+    private bool HasAppointment(bool reOpen = true, bool close = true)
     {
         _logger.StartMethod();
 
-        _appointments!.Open();
-        bool result = _appointments.HasAppointment(_service, _center);
-        _appointments.Close();
+        if(reOpen)
+            _appointments!.Open();
+        bool result = _appointments!.HasAppointment(_service, _center);
+        if(close)
+            _appointments.Close();
 
         _logger.StopMethod(result);
         return result;
     }
 
-    private bool RemoveAppointmentByPoint()
+    private bool RemoveAppointmentByPoint(bool reOpen = true, bool close = true)
     {
         _logger.StartMethod();
 
-        _appointments!.Open();
-        bool result = _appointments.TryRemoveAppointment(_service, _center);
-        _appointments.Close();
+        if(reOpen)
+            _appointments!.Open();
+        bool result = _appointments!.TryRemoveAppointment(_service, _center);
+        if(close)
+            _appointments.Close();
 
         _logger.StopMethod(result);
         return result;
     }
 
-    private DateOnly? GetFirstAvaliableDate()
+    private DateOnly? GetFirstAvaliableDate(bool reOpen = true, bool close = true)
     {
         _logger.StartMethod();
 
-        _creator!.Open();
-        DateOnly? result = _creator.GetFirstAvaliableDate(_service, _center, _beforeDate);
-        _creator.Close();
+        if(reOpen)
+            _creator!.Open();
+
+        DateOnly? result = _creator!.GetFirstAvaliableDate(_service, _center, BeforeDate);
+        if(close)
+            _creator.Close();
 
         _logger.StopMethod(result);
         return result;
     }
 
-    private bool CreateAppointment(out DateTime createdDateTime)
+    private bool CreateAppointment(out DateTime createdDateTime, bool reOpen = true, bool close = true)
     {
         _logger.StartMethod();
 
-        _creator!.Open();
-        bool result =_creator.CreateAppointment(_service, _center, _beforeDate, _name, _surname, _documentType, _document, _phoneNumber, _email, out createdDateTime);
-        _creator.Close();
+        if(reOpen)
+            _creator!.Open();
+        bool result =_creator!.CreateAppointment(_service, _center, BeforeDate, _name, _surname, _documentType, _document, _phoneNumber, _email, out createdDateTime);
+        if(close)
+            _creator.Close();
+
+        _logger.StopMethod(result);
+        return result;
+    }
+
+    private bool CreateAppointmentByExactDate(DateOnly exactDate, out DateTime createdDateTime, bool reOpen = true, bool close = true)
+    {
+        _logger.StartMethod();
+
+        if(reOpen)
+            _creator!.Open();
+        bool result = _creator!.CreateAppointmentByExactDate(_service, _center, exactDate, _name, _surname, _documentType, _document, _phoneNumber, _email, out createdDateTime);
+        if(close)
+            _creator.Close();
 
         _logger.StopMethod(result);
         return result;

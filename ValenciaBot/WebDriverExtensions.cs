@@ -10,7 +10,7 @@ public static class WebDriverExtensions
     public static void Wait(this IWebDriver driver, int delay, int poolingInterval)
     {
         var end = DateTime.Now.AddMilliseconds(delay);
-        var wait = new WebDriverWait(driver, TimeSpan.FromMilliseconds(delay));
+        WebDriverWait wait = new(driver, TimeSpan.FromMilliseconds(delay));
         wait.PollingInterval = TimeSpan.FromMilliseconds(poolingInterval);
         wait.Until(wd => DateTime.Now >= end);
     }
@@ -46,5 +46,20 @@ public static class WebDriverExtensions
                             "}" +
                             "return getElementXPath(arguments[0]).toLowerCase();";
         return (string)((IJavaScriptExecutor)driver).ExecuteScript(javaScript, element);
+    }
+
+    public static IWebElement? GetElementParent(this IWebDriver driver, IWebElement element, int times = 1)
+    {
+        string xPath = driver.GetElementXPath(element);
+
+        for(int i = 0; i < times; i++)
+        {
+            int lastSlash = xPath.LastIndexOf('/');
+            if(lastSlash == -1)
+                return null;
+            else
+                xPath = xPath[..lastSlash];
+        }
+        return driver.FindElement(By.XPath(xPath));
     }
 }

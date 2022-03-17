@@ -12,7 +12,7 @@ namespace ValenciaBot;
 
 public class Logger
 {
-    private static ILogger _logger = new LoggerCombiner(new ConsoleLogger(),
+    private static readonly ILogger _logger = new LoggerCombiner(new ConsoleLogger(),
                                                         new FileLogger(Program.LogPath));
 
     public static void Log(string message) => _logger.Log(message);
@@ -22,8 +22,8 @@ public class Logger
 
 public class ClassLogger : ILogger
 {
-    private string _prefix;
-    private int _startFrameCount;
+    private readonly string _prefix;
+    private readonly int _startFrameCount;
 
     public ClassLogger(string className)
     {
@@ -81,7 +81,7 @@ public class ClassLogger : ILogger
 
 public class ConsoleLogger : ILogger
 {
-    public void Log(string message) => Console.WriteLine($"{DateTime.UtcNow.ToString("[HH:mm:ss UTC] ")}------------" + message + '.');
+    public void Log(string message) => Console.WriteLine($"{DateTime.UtcNow:[HH:mm:ss UTC]} ------------" + message + '.');
     public void LogWarning(string message) => Log("Warning: " + message);
     public void LogError(string message) => Log("Error: " + message);
 }
@@ -90,11 +90,11 @@ public class FileLogger : ILogger, IDisposable
 {
     public const string DefaultExtension = ".log";
 
-    private StringBuilder _logBuilder = new StringBuilder();
-    private string _filePath;
-    private string _originalFilePath;
-    private System.Timers.Timer _timer;
-    private int _maxLettersInFile;
+    private readonly StringBuilder _logBuilder = new();
+    private string _filePath = String.Empty;
+    private readonly string _originalFilePath;
+    private readonly System.Timers.Timer _timer;
+    private readonly int _maxLettersInFile;
     private int _lettersLogged;
 
     public FileLogger(string path = "log.log", int maxLettersInFile = 100000, int logPeriodInseconds = 20)
@@ -151,7 +151,7 @@ public class FileLogger : ILogger, IDisposable
 
 public class LoggerCombiner : ILogger
 {
-    private List<ILogger> _loggers;
+    private readonly List<ILogger> _loggers;
 
     public LoggerCombiner(params ILogger[] loggers)
     {

@@ -27,11 +27,10 @@ public class DriverWithDialogs
     protected void WaitLoading(out Dialog? otherDialog, int delay = TimeoutForLoading)
     {
         _logger.StartMethod(delay);
-        Dialog? dialog;
         while(true)
         {
             _driver!.Wait(delay);
-            if(TryGetDialog(out dialog))
+            if(TryGetDialog(out Dialog? dialog))
             {
                 if(dialog!.Created)
                 {
@@ -64,8 +63,7 @@ public class DriverWithDialogs
     protected bool TryGetInfoDialog(out Dialog? dialog)
     {
         _logger.StartMethod();
-        Dialog? foundDialog;
-        WaitLoading(out foundDialog);
+        WaitLoading(out Dialog? foundDialog);
         if(foundDialog == null)
             WaitLoading(out foundDialog);
 
