@@ -13,7 +13,7 @@ namespace ValenciaBot;
 public class Logger
 {
     private static ILogger _logger = new LoggerCombiner(new ConsoleLogger(),
-                                                        new FileLogger(DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\logs\\log.log"));
+                                                        new FileLogger(Program.LogPath));
 
     public static void Log(string message) => _logger.Log(message);
     public static void LogWarning(string message) => _logger.LogWarning(message);

@@ -2,3 +2,4 @@ Debug/
 Release/
 *.log
 botSubs.txt
+telegramBotToken.txt

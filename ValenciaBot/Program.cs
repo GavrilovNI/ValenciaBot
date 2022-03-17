@@ -20,6 +20,7 @@ public class Program
             return;
         }
     }
+    public static readonly string LogPath = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\logs\\log.log";
     private ClassLogger _logger = new ClassLogger(nameof(Program));
 
     //private string _service = "ATENCION ESPECIALIZADA-LICENCIAS, INOCUAS,CONTENEDORES";
@@ -43,7 +44,7 @@ public class Program
     public bool Running => _timer != null;
 
     private string _telegramBotSunscribersFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\botSubs.txt";
-    private string _telegramBotToken = "";
+    private string _telegramBotTokenFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\telegramBotToken.txt";
 
     private TelegramBot? _bot;
 
@@ -140,7 +141,20 @@ public class Program
             return;
         _logger.StartMethod();
 
-        _bot = string.IsNullOrEmpty(_telegramBotToken) ? null : new TelegramBot(_telegramBotToken, _telegramBotSunscribersFile);
+        string telegramBotTokenFileFullPath = Path.GetFullPath(_telegramBotTokenFile);
+        if(File.Exists(telegramBotTokenFileFullPath))
+        {
+            string botToken = File.ReadAllLines(telegramBotTokenFileFullPath)[0];
+            _bot = string.IsNullOrEmpty(botToken) ? null : new TelegramBot(botToken, _telegramBotSunscribersFile);
+            if(_bot == null)
+                _logger.LogWarning("Telegram bot was not created. Token inside token file not found. It should be placed on first line");
+            else
+                _logger.Log($"Telegram bot created. Token: '{botToken}'");
+        }
+        else
+        {
+            _logger.LogWarning("Telegram bot was not created. Token file not found");
+        }
 
         _appointments = new Appointments(_document);
         _creator = new AppointmentCreator();
