@@ -9,78 +9,117 @@ using ValenciaBot.WebDriverExtensions;
 
 namespace ValenciaBot;
 
-public class Appointments : DriverWithDialogs
+public class Appointments : DriverWithDialogs<BetterChromeDriver>
 {
-    public bool Opened => _driver != null;
+    private string _settedDocument = "";
+    public string CurrentDocument { get; private set; } = "";
 
-    private string _document = "761234567";
+    private const string _url = "http://www.valencia.es/QSIGE/apps/citaprevia/index.html#!/queryAppoinment";
+    
+    private string _currentTab = String.Empty;
+    public bool Opened => TabExists && _currentTab == _driver.CurrentTab;
+    private bool TabExists => _driver.TabExists(_currentTab);
 
-
-    public Appointments(string document)
+    public Appointments(BetterChromeDriver driver) : base(driver)
     {
-        _logger.Log($"Start. Document: '{document}'");
-        _document = document;
+        
     }
 
-    public void ChangeDocument(string document)
+    public void Reload()
     {
-        _document = document;
-        if(Opened)
+        if(TabExists == false)
+            _currentTab = _driver.CreateTab();
+
+        _driver.SetTab(_currentTab);
+        _driver.Navigate().GoToUrl(_url);
+
+        IWebElement phoneElement = _driver.FindElement(By.Id("txtTelefono"));
+        IWebElement phoneElementParent2 = _driver.GetElementParent(phoneElement, 2)!;
+        if(phoneElementParent2.GetAttribute("className") != "form-group ng-hide")
         {
-            Close();
-            Open();
+            _logger.LogError("Appointments page loaded wrong. Reopening");
+            Reload();
         }
     }
 
-    private Appointment? GetAppointment(Predicate<Appointment> match)
+    public void Open()
     {
-        _logger.StartMethod(match);
-        Appointment[] appointments = GetAllApointments();
+        _logger.StartMethod();
+
+        if(TabExists == false)
+            _currentTab = _driver.CreateTab();
+
+        _driver.SetTab(_currentTab);
+        if(_driver.Url != _url)
+            Reload();
+
+        _logger.StopMethod();
+    }
+
+    public void Close()
+    {
+        _logger.StartMethod();
+
+        if(TabExists)
+            _driver.CloseTab(_currentTab);
+        _currentTab = String.Empty;
+
+        _settedDocument = String.Empty;
+        CurrentDocument = String.Empty;
+
+        _logger.StopMethod();
+    }
+
+    private Appointment? GetAppointment(string document, Predicate<Appointment> match)
+    {
+        _logger.StartMethod(document, match);
+        Appointment[] appointments = GetAllApointments(document);
         int index = Array.FindIndex(appointments, match);
         var result = index < 0 ? null : appointments[index];
         _logger.StopMethod(result);
         return result;
     }
 
-    public Appointment? GetAppointment(string service, string center)
+    public Appointment? GetAppointment(string document, LocationInfo location)
     {
-        _logger.StartMethod(service, center);
-        var result = GetAppointment(a => a.Service == service && a.Center == center);
+        _logger.StartMethod(document, location);
+        var result = GetAppointment(document, a => a.Location == location);
         _logger.StopMethod(result);
         return result;
     }
 
-    private int GetAppointmentIndex(Predicate<Appointment> match)
+    private int GetAppointmentIndex(string document, Predicate<Appointment> match)
     {
-        _logger.StartMethod(match);
-        Appointment[] appointments = GetAllApointments();
+        _logger.StartMethod(document, match);
+        Appointment[] appointments = GetAllApointments(document);
         var result = Array.FindIndex(appointments, match);
         _logger.StopMethod(result);
         return result;
     }
 
-    public bool HasAppointment(Predicate<Appointment> match)
+    public bool HasAppointment(string document, Predicate<Appointment> match)
     {
-        _logger.StartMethod(match);
-        bool result = GetAppointmentIndex(match) >= 0;
+        _logger.StartMethod(document, match);
+        bool result = GetAppointmentIndex(document, match) >= 0;
         _logger.StopMethod(result);
         return result;
     }
 
-    public bool HasAppointment(string service, string center)
+    public bool HasAppointment(string document, LocationInfo location)
     {
-        _logger.StartMethod(service, center);
-        bool result = HasAppointment(a => a.Service == service && a.Center == center);
+        _logger.StartMethod(document, location);
+        bool result = HasAppointment(document, a => a.Location == location);
         _logger.StopMethod(result);
         return result;
     }
 
-    public Appointment[] GetAllApointments()
+    public Appointment[] GetAllApointments(string document)
     {
-        _logger.StartMethod();
+        _logger.StartMethod(document);
+        SetupDocument(document);
         List<Appointment> result = new();
         int i = 0;
-        while(TryGetAppointment(i, out Appointment? appointment))
+        while(TryGetAppointment(document, i, out Appointment? appointment, false))
         {
             result.Add(appointment!);
             i++;
@@ -89,10 +128,10 @@ public class Appointments : DriverWithDialogs
         return result.ToArray();
     }
 
-    public bool TryRemoveAppointment(Predicate<Appointment> match)
+    public bool TryRemoveAppointment(string document, Predicate<Appointment> match)
     {
-        _logger.StartMethod(match);
-        Appointment? appointment = GetAppointment(match);
+        _logger.StartMethod(document, match);
+        Appointment? appointment = GetAppointment(document, match);
         if(appointment == null)
         {
             _logger.StopMethod(false);
@@ -104,68 +143,40 @@ public class Appointments : DriverWithDialogs
         return true;
     }
 
-    public bool TryRemoveAppointment(string service, string center)
+    public bool TryRemoveAppointment(string document, LocationInfo location)
     {
-        _logger.StartMethod(service, center);
-        var result = TryRemoveAppointment(a => a.Service == service && a.Center == center);
+        _logger.StartMethod(document, location);
+        var result = TryRemoveAppointment(document, a => a.Location == location);
         _logger.StopMethod(result);
         return result;
     }
 
-    public bool TryRemoveAppointment(string service, string center, DateTime dateTime)
+    public bool TryRemoveAppointment(string document, LocationInfo location, DateTime dateTime)
     {
-        _logger.StartMethod(service, center, dateTime);
+        _logger.StartMethod(document, location, dateTime);
         bool timeMatch(DateTime time) => time.Year == dateTime.Year &&
                                         time.Month == dateTime.Month &&
                                         time.Day == dateTime.Day &&
                                         time.Hour == dateTime.Hour &&
                                         time.Minute == dateTime.Minute;
-        var result = TryRemoveAppointment(a => a.Service == service && a.Center == center && timeMatch(a.DateTime));
+        var result = TryRemoveAppointment(document, a => a.Location == location && timeMatch(a.DateTime));
         _logger.StopMethod(result);
         return result;
     }
 
-
-    public void Open()
+    private void SetupDocument(string document)
     {
-        _logger.StartMethod();
-        if(Opened)
-        {
-            _logger.Log("Browser is already opened. Closing");
-            Close();
-        }
-        _driver = new ChromeDriver()
-        {
-            Url = "http://www.valencia.es/QSIGE/apps/citaprevia/index.html#!/queryAppoinment"
-        };
+        _logger.StartMethod(document);
 
-        _driver.Wait(TimeoutForLoading);
+        Open();
 
-        IWebElement phoneElement = _driver.FindElement(By.Id("txtTelefono"));
-        IWebElement phoneElementParent2 = _driver.GetElementParent(phoneElement, 2)!;
-
-        if(phoneElementParent2.GetAttribute("className") != "form-group ng-hide")
-        {
-            _logger.LogError("Appointments page loaded wrong");
-            throw new Exception("Appointments page loaded wrong.");
-        }
-
-        SetDocument(_document);
+        SetDocument(document);
         SubmitDocument();
 
-        _driver.Wait(TimeoutForLoading);
+        _driver!.Wait(TimeoutForLoading);
 
         WaitLoading(out Dialog _);
-        _logger.StopMethod();
-    }
 
-    public void Close()
-    {
-        if(Opened == false)
-            return;
-        _logger.StartMethod();
-        _driver!.Close();
-        _driver = null;
         _logger.StopMethod();
     }
 
@@ -173,7 +184,9 @@ public class Appointments : DriverWithDialogs
     {
         _logger.StartMethod(document);
         IWebElement documentElement = _driver!.FindElement(By.Id("nif"));
+        documentElement.Clear();
         documentElement.SendKeys(document);
+        _settedDocument = document;
         _logger.StopMethod();
     }
 
@@ -182,12 +195,15 @@ public class Appointments : DriverWithDialogs
         _logger.StartMethod();
         IWebElement submitButton = _driver!.FindElement(By.XPath("html/body/div[2]/div/div[3]/div/div/div[1]/div[2]/form/div[3]/button"));
         submitButton.Submit();
+        CurrentDocument = _settedDocument;
         _logger.StopMethod();
     }
 
-    public bool TryGetAppointment(int index, out Appointment? appointment)
+    private bool TryGetAppointment(string document, int index, out Appointment? appointment, bool reload = true)
     {
         _logger.StartMethod(index);
+        if(reload)
+            SetupDocument(document);
         try
         {
             IWebElement appointmentElement = _driver!.FindElement(By.XPath($"/html/body/div[2]/div/div[3]/div/div/div[2]/div[2]/table/tbody/tr[1]/td[{index + 1}]"));

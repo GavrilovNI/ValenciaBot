@@ -7,31 +7,31 @@ using ValenciaBot.WebDriverExtensions;
 
 namespace ValenciaBot;
 
-public class AppointmentCreator : DriverWithDialogs
+public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>
 {
-    public bool Opened => _driver != null;
+    private readonly string _url = "http://www.valencia.es/QSIGE/apps/citaprevia/index.html#!/newAppointment/";
+
+    private string _currentTab = String.Empty;
+    public bool Opened => TabExists && _currentTab == _driver.CurrentTab;
+    private bool TabExists => _driver.TabExists(_currentTab);
 
     private DatePicker? _datePicker;
-
     private const int _minTimeZone = -12; // min world time zone
 
-    public AppointmentCreator()
+    public AppointmentCreator(BetterChromeDriver driver) : base(driver)
     {
-        _logger.Log($"Start");
+        
     }
 
-    public DateOnly? GetFirstAvaliableDate(string service,
-                                           string center,
+    public DateOnly? GetFirstAvaliableDate(LocationInfo location,
                                            DateOnly beforeDate)
     {
-        if(Opened == false)
-            throw new InvalidOperationException(nameof(AppointmentCreator) + " is not opened.");
-
-        _logger.StartMethod(service, center, beforeDate);
+        _logger.StartMethod(location, beforeDate);
+        Reload();
 
         DateOnly? result = null;
-        SelectService(service);
-        if(TrySelectCenter(center))
+        SelectService(location.Service);
+        if(TrySelectCenter(location.Center))
         {
             _datePicker!.Open();
             bool found = _datePicker.TryGetFirstAvaliableDay(out DateOnly dateTime, DateTime.UtcNow.AddHours(_minTimeZone).ToDateOnly(), beforeDate);
@@ -45,28 +45,20 @@ public class AppointmentCreator : DriverWithDialogs
         return result;
     }
 
-    public bool CreateAppointmentByExactDate(string service,
-                                  string center,
-                                  DateOnly exactDate,
-                                  string name,
-                                  string surname,
-                                  string documentType,
-                                  string document,
-                                  string phoneNumber,
-                                  string email,
-                                  out DateTime appointmentDateTime)
+    public bool CreateAppointmentByExactDate(AppointmentInfo info,
+                                             DateOnly exactDate,
+                                             out DateTime appointmentDateTime)
     {
-        if(Opened == false)
-            throw new InvalidOperationException(nameof(AppointmentCreator) + " is not opened.");
+        Open();
 
-        _logger.StartMethod(service, center, exactDate, name, surname, documentType, document, phoneNumber, email);
+        _logger.StartMethod(info, exactDate);
 
         appointmentDateTime = exactDate.ToDateTime();
 
         try
         {
-            SelectService(service);
-            if(TrySelectCenter(center) == false)
+            SelectService(info.Location.Service);
+            if(TrySelectCenter(info.Location.Center) == false)
             {
                 _logger.StopMethod(false);
                 return false;
@@ -86,11 +78,11 @@ public class AppointmentCreator : DriverWithDialogs
             DateOnly choosenDate = exactDate;
             TimeOnly selectedTime = SelectTime(1); // 0 - none; 1,2,3... avaliable times
 
-            SetName(name, surname);
-            SelectDocumentType(documentType);
-            SetDocument(document);
-            SetPhoneNumber(phoneNumber);
-            SetEmail(email);
+            SetName(info.Name, info.Surname);
+            SelectDocumentType(info.DocumentType);
+            SetDocument(info.Document);
+            SetPhoneNumber(info.PhoneNumber);
+            SetEmail(info.Email);
 
             appointmentDateTime = choosenDate.ToDateTime(selectedTime);
 
@@ -110,27 +102,19 @@ public class AppointmentCreator : DriverWithDialogs
         }
     }
 
-    public bool CreateAppointment(string service,
-                                  string center,
+    public bool CreateAppointment(AppointmentInfo info,
                                   DateOnly beforeDate,
-                                  string name,
-                                  string surname,
-                                  string documentType,
-                                  string document,
-                                  string phoneNumber,
-                                  string email,
                                   out DateTime appointmentDateTime)
     {
-        if(Opened == false)
-            throw new InvalidOperationException(nameof(AppointmentCreator) + " is not opened.");
+        Open();
 
-        _logger.StartMethod(service, center, beforeDate, name, surname, documentType, document, phoneNumber, email);
+        _logger.StartMethod(info, beforeDate);
 
         appointmentDateTime = beforeDate.ToDateTime();
 
         try
         {
-            DateOnly? firstAvaliableDay = GetFirstAvaliableDate(service, center, beforeDate);
+            DateOnly? firstAvaliableDay = GetFirstAvaliableDate(info.Location, beforeDate);
             if(firstAvaliableDay == null)
             {
                 _logger.StopMethod(false);
@@ -138,7 +122,7 @@ public class AppointmentCreator : DriverWithDialogs
             }
             else
             {
-                return CreateAppointmentByExactDate(service, center, firstAvaliableDay.Value, name, surname, documentType, document, phoneNumber, email, out appointmentDateTime);
+                return CreateAppointmentByExactDate(info, firstAvaliableDay.Value, out appointmentDateTime);
             }
         }
         catch (Exception ex)
@@ -157,31 +141,37 @@ public class AppointmentCreator : DriverWithDialogs
     {
         _logger.StartMethod();
 
-        if(Opened)
-        {
-            _logger.Log("Browser is already opened. Closing");
-            Close();
-        }
-        _driver = new ChromeDriver()
-        {
-            Url = "http://www.valencia.es/QSIGE/apps/citaprevia/index.html#!/newAppointment/"
-        };
+        if(TabExists == false )
+            _currentTab = _driver.CreateNewWindow();
+
+        if(_driver.Url != _url)
+            Reload();
+        _logger.StopMethod();
+    }
+
+    public void Reload()
+    {
+        _logger.StartMethod();
+
+        if(TabExists == false)
+            _currentTab = _driver.CreateTab();
+
+        _driver.SetTab(_currentTab);
+
+        _driver.Navigate().GoToUrl(_url);
         _driver.Wait(TimeoutForLoading);
 
         UpdateDatePicker();
-
         _logger.StopMethod();
     }
 
     public void Close()
     {
-        if(Opened == false)
-            return;
-
         _logger.StartMethod();
 
-        _driver!.Close();
-        _driver = null;
+        if(TabExists)
+            _driver.CloseTab(_currentTab);
+        _currentTab = String.Empty;
 
         _logger.StopMethod();
     }
@@ -240,6 +230,8 @@ public class AppointmentCreator : DriverWithDialogs
         IWebElement nameElement = _driver!.FindElement(By.Id("nameInput"));
         IWebElement surnameElement = _driver.FindElement(By.Id("surnameInput"));
 
+        nameElement.Clear();
+        surnameElement.Clear();
         nameElement.SendKeys(name);
         surnameElement.SendKeys(surname);
 
@@ -262,6 +254,7 @@ public class AppointmentCreator : DriverWithDialogs
         _logger.StartMethod(document);
 
         IWebElement documentElement = _driver!.FindElement(By.Id("nifInput"));
+        documentElement.Clear();
         documentElement.SendKeys(document);
 
         _logger.StopMethod();
@@ -272,6 +265,7 @@ public class AppointmentCreator : DriverWithDialogs
         _logger.StartMethod(phoneNumber);
 
         IWebElement phoneNumberElement = _driver!.FindElement(By.Id("tlfnoInput"));
+        phoneNumberElement.Clear();
         phoneNumberElement.SendKeys(phoneNumber);
 
         _logger.StopMethod();
@@ -282,6 +276,7 @@ public class AppointmentCreator : DriverWithDialogs
         _logger.StartMethod(email);
 
         IWebElement emailElement = _driver!.FindElement(By.Id("emailInput"));
+        emailElement.Clear();
         emailElement.SendKeys(email);
 
         _logger.StopMethod();

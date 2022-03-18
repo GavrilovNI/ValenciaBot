@@ -8,20 +8,17 @@ using ValenciaBot.WebDriverExtensions;
 
 namespace ValenciaBot;
 
-public class DriverWithDialogs
+public class DriverWithDialogs<T> where T : IWebDriver
 {
     protected ClassLogger _logger;
 
     public const int TimeoutForLoading = 1000;
-    protected IWebDriver? _driver = null;
+    protected T _driver;
 
-    public DriverWithDialogs()
-    {
-        _logger = new(GetType().Name);
-    }
-    public DriverWithDialogs(IWebDriver driver) : this()
+    public DriverWithDialogs(T driver)
     {
         _driver = driver;
+        _logger = new(GetType().Name);
     }
 
     protected void WaitLoading(out Dialog? otherDialog, int delay = TimeoutForLoading)

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
@@ -42,18 +43,50 @@ public class Program
 
     public static void Main()
     {
+        AppointmentInfo testInfo = new AppointmentInfo()
+        {
+            Location = new LocationInfo()
+            {
+                Service = "ATENCION ESPECIALIZADA-LICENCIAS, INOCUAS,CONTENEDORES",
+                Center = "JUNTA DE DISTRITO ABASTOS",
+            },
+            Name = "Name",
+            Surname = "Surname",
+            DocumentType = "Pasaporte",
+            Document = "761234566",
+            PhoneNumber = "681123456",
+            Email = "email@email.com"
+        };
+
+        AppointmentInfo info = new()
+        {
+            Location = new LocationInfo()
+            {
+                Service = "PADRON CP - Periodista Azzati",
+                Center = "PADRON Periodista Azzati 2",
+            },
+            Name = "Name",
+            Surname = "Surname",
+            DocumentType = "Pasaporte",
+            Document = "761234566",
+            PhoneNumber = "681123456",
+            Email = "email@email.com"
+        };
+
+        DateOnly beforeDate = new(2022, 6, 13);
+
         //CreateTelegramBot();
         _programs = new Program[]
         {
-            new Program("ATENCION ESPECIALIZADA-LICENCIAS, INOCUAS,CONTENEDORES", "JUNTA DE DISTRITO ABASTOS"),
+            new Program(info, beforeDate),
         };
         /*_programs = new Program[]
         {
-            new Program("PADRON CP - Periodista Azzati", "PADRON Periodista Azzati 2"),
-            new Program("PADRON CP - OAC Tabacalera", "OAC TABACALERA"),
-            new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO ABASTOS"),
-            new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO MARITIMO"),
-            new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO TRANSITS"),
+            new Program(info, beforeDate),
+            //new Program("PADRON CP - OAC Tabacalera", "OAC TABACALERA"),
+            //new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO ABASTOS"),
+            //new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO MARITIMO"),
+            //new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO TRANSITS"),
         };*/
 
         _bot?.SendMessageToSubscribers("Bot started.");
@@ -65,23 +98,13 @@ public class Program
         _bot?.SendMessageToSubscribers("Bot stopped.");
     }
 
-    public string Service => _service;
-    public string Center => _center;
-
-    private readonly string _service;
-    private readonly string _center;
+    public readonly AppointmentInfo Info;
     private readonly DateOnly _beforeDateOriginal = new(2022, 6, 13);
-    private readonly string _name = "Name";
-    private readonly string _surname = "Surname";
-    private readonly string _documentType = "Pasaporte";
-    private readonly string _document = "761234566";
-    private readonly string _phoneNumber = "681123456";
-    private readonly string _email = "email@email.com";
 
     private Appointments? _appointments;
     private AppointmentCreator? _creator;
 
-    private readonly int _delayInSeconds = 60;
+    private readonly int _delayInSeconds = 5;
     private System.Timers.Timer? _timer = null;
     public bool Running => _timer != null;
 
@@ -89,11 +112,15 @@ public class Program
 
     private DateOnly BeforeDate => ExistingAppointment.HasValue ? ExistingAppointment.Value.ToDateOnly() : _beforeDateOriginal;
 
-    public Program(string service, string center)
+    private readonly BetterChromeDriver _driver;
+
+    public Program(AppointmentInfo info, DateOnly beforeDate)
     {
-        _logger.Log($"Program created. Service: '{service}'. Center: '{center}'");
-        _service = service;
-        _center = center;
+        _logger.Log($"Program created. Appointment info: '{info}'. Before date: '{beforeDate}'");
+        Info = info;
+        _beforeDateOriginal = beforeDate;
+
+        _driver = new BetterChromeDriver();
     }
 
     private bool TryCreateBetterAppointment()
@@ -101,29 +128,29 @@ public class Program
         _logger.StartMethod();
         try
         {
-            _logger.Log("Trying to create better appointment");
-            _appointments!.Open();
-            bool hasOldAppointment = LookForAlreadyCreatedAppointment(_service, _center);
-            if(hasOldAppointment == false)
-                _appointments!.Close();
+            DateTime? oldAppointment = _appointments!.GetAppointment(Info.Document, Info.Location)?.DateTime;
+            if(oldAppointment == null && ExistingAppointment != null)
+            {
+                _bot?.SendMessageToSubscribers("Warning: Existing appointment was removed since last check.");
+                _logger.LogWarning("Existing appointment was removed since last check");
+            }
+            ExistingAppointment = oldAppointment;
 
-            _creator!.Open();
-            DateOnly? avaliableDate = _creator.GetFirstAvaliableDate(_service, _center, BeforeDate);
+            DateOnly? avaliableDate = _creator!.GetFirstAvaliableDate(Info.Location, BeforeDate);
             if(avaliableDate is null)
             {
-                _appointments!.Close();
-                _creator!.Close();
                 //_bot?.SendMessageToSubscribers("Better date not found.");
                 _logger.StopMethod(true, "Better date not found");
                 return true;
             }
             else
             {
-                _bot?.SendMessageToSubscribers($"Found avaliable date {avaliableDate}");
-                if(hasOldAppointment)
+                _logger.Log($"Found avaliable date {avaliableDate}");
+                _bot?.SendMessageToSubscribers($"Found avaliable date {avaliableDate}.");
+
+                if(ExistingAppointment.HasValue)
                 {
-                    bool appointmentRemoved = _appointments.TryRemoveAppointment(_service, _center);
-                    _appointments.Close();
+                    bool appointmentRemoved = _appointments!.TryRemoveAppointment(Info.Document, Info.Location);
                     if(appointmentRemoved == false)
                     {
                         _bot?.SendMessageToSubscribers("Error: Appointment was not removed. But it exists.");
@@ -131,14 +158,18 @@ public class Program
                         return false;
                     }
                 }
-                
-                bool created = _creator.CreateAppointmentByExactDate(_service, _center, avaliableDate.Value, _name, _surname, _documentType, _document, _phoneNumber, _email, out DateTime createdTime);
-                _creator.Close();
+
+                bool created = _creator.CreateAppointmentByExactDate(Info, avaliableDate.Value, out DateTime createdTime);
+                if(created)
+                {
+                    DateTime? createdAppointmentDate = _appointments!.GetAppointment(Info.Document, Info.Location)?.DateTime;
+                    created = createdAppointmentDate == createdTime;
+                }
                 if(created)
                 {
                     ExistingAppointment = createdTime;
-                    _bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}. Document : {_document}. Service: '{_service}'. Center: '{_center}'.");
-                    _logger.StopMethod(true, "----Created new appointment----", createdTime, _document, _service, _center);
+                    _bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}. Info : {Info}'.");
+                    _logger.StopMethod(true, "----Created new appointment----", createdTime, Info);
                     return true;
                 }
                 else
@@ -152,71 +183,19 @@ public class Program
         catch(Exception ex)
         {
             _logger.LogError($"{ex.Message} {ex.StackTrace}");
-            _creator!.Close();
-            _appointments!.Close();
+            _driver.Close();
             _logger.StopMethod(false, ex);
             return false;
         }
     }
-
-    public void Stop()
-    {
-        if(Running == false)
-            return;
-        _logger.StartMethod();
-
-        _timer!.Stop();
-        _timer!.Dispose();
-        _timer = null;
-        _appointments!.Close();
-        _creator!.Close();
-
-        _logger.StopMethod();
-    }
-
-    private bool LookForAlreadyCreatedAppointment(string service, string center)
-    {
-        _logger.StartMethod(BeforeDate);
-        DateTime? existingAppointmentDateTime = _appointments!.GetAppointment(service, center)?.DateTime;
-
-        if(existingAppointmentDateTime is null && ExistingAppointment is not null)
-        {
-            _bot?.SendMessageToSubscribers("Warning: Existing appointment was removed since last check.");
-            _logger.StopMethod(true, $"Existing appointment was removed since last check");
-        }
-
-        DateOnly oldBeforeDate = BeforeDate;
-        ExistingAppointment = existingAppointmentDateTime;
-
-        if(existingAppointmentDateTime != null)
-        {
-            DateOnly existingAppointmentDate = existingAppointmentDateTime.Value.ToDateOnly();
-            if(existingAppointmentDate < oldBeforeDate)
-            {
-                _bot?.SendCurrentAppointmentInfoToSubscribers(this);
-                _logger.StopMethod(true, $"Found already existing appointment with date {existingAppointmentDateTime}");
-            }
-            else
-            {
-                _logger.StopMethod(true, $"Old appointment before date {oldBeforeDate} was not found. Found appointment date: {existingAppointmentDate}");
-            }
-        }
-        else
-        {
-            _logger.StopMethod(false, "Old appointment was not found");
-        }
-
-        return ExistingAppointment is not null;
-    }
-
     public void Start()
     {
         if(Running)
             return;
         _logger.StartMethod();
 
-        _appointments = new Appointments(_document);
-        _creator = new AppointmentCreator();
+        _appointments = new Appointments(_driver);
+        _creator = new AppointmentCreator(_driver);
 
         void TimerTask(object? o, object? a)
         {
@@ -243,6 +222,23 @@ public class Program
         _timer.AutoReset = false;
 
         TimerTask(null, null);
+
+        _logger.StopMethod();
+    }
+
+    public void Stop()
+    {
+        if(Running == false)
+            return;
+        _logger.StartMethod();
+
+        _timer!.Stop();
+        _timer!.Dispose();
+        _timer = null;
+        _appointments!.Close();
+        _creator!.Close();
+
+        _driver!.Close();
 
         _logger.StopMethod();
     }

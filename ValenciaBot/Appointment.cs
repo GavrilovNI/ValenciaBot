@@ -2,7 +2,7 @@
 using System.Globalization;
 
 namespace ValenciaBot;
-public class Appointment : DriverWithDialogs
+public class Appointment : DriverWithDialogs<IWebDriver>
 {
     private readonly IWebElement _appointment;
 
@@ -14,15 +14,9 @@ public class Appointment : DriverWithDialogs
             return DateTime.ParseExact(time, "dd/MM/yyyy - HH:mm", CultureInfo.InvariantCulture);
         }
     }
-    public string Center
-    {
-        get
-        {
-            string center = _appointment.FindElement(By.XPath("p[2]")).Text;
-            center = center["Centre: ".Length..];
-            return center;
-        }
-    }
+
+    public LocationInfo Location => new LocationInfo(Service, Center);
+
     public string Service
     {
         get
@@ -30,6 +24,15 @@ public class Appointment : DriverWithDialogs
             string service = _appointment.FindElement(By.XPath("p[3]")).Text;
             service = service["Servici: ".Length..];
             return service;
+        }
+    }
+    public string Center
+    {
+        get
+        {
+            string center = _appointment.FindElement(By.XPath("p[2]")).Text;
+            center = center["Centre: ".Length..];
+            return center;
         }
     }
 

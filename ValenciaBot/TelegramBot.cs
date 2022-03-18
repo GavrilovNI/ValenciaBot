@@ -57,7 +57,7 @@ public class TelegramBot : IDisposable
 
     private async void SendCurrentAppointmentInfoToSubscriber(Program program, long subscriberId)
     {
-        string programInfo = $"Service: '{program.Service}'. Center: '{program.Center}'. ";
+        string programInfo = $"Info: {program.Info}. ";
         string currentAppointmentInfo = programInfo + (program.ExistingAppointment.HasValue ? $"Current appointment date: {program.ExistingAppointment}." : "Now we have no appointment.");
         await _client.SendTextMessageAsync(subscriberId, currentAppointmentInfo);
     }

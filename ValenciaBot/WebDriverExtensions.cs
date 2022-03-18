@@ -1,4 +1,6 @@
 ﻿using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
 
 namespace ValenciaBot.WebDriverExtensions;
@@ -15,13 +17,13 @@ public static class WebDriverExtensions
         wait.Until(wd => DateTime.Now >= end);
     }
 
-    public static SelectElement GetSelector(this IWebDriver driver, By by)
+    public static SelectElement GetSelector(this ISearchContext context, By by)
     {
-        IWebElement selectorElement = driver.FindElement(by);
+        IWebElement selectorElement = context.FindElement(by);
         return new SelectElement(selectorElement);
     }
 
-    public static string GetElementXPath(this IWebDriver driver, IWebElement element)
+    public static string GetElementXPath(this IJavaScriptExecutor executor, IWebElement element)
     {
         string javaScript = "function getElementXPath(elt){" +
                                 "var path = \"\";" +
@@ -45,10 +47,10 @@ public static class WebDriverExtensions
                                 "return count;" +
                             "}" +
                             "return getElementXPath(arguments[0]).toLowerCase();";
-        return (string)((IJavaScriptExecutor)driver).ExecuteScript(javaScript, element);
+        return (string)executor.ExecuteScript(javaScript, element);
     }
 
-    public static IWebElement? GetElementParent(this IWebDriver driver, IWebElement element, int times = 1)
+    public static IWebElement? GetElementParent<T>(this T driver, IWebElement element, int times = 1) where T : IJavaScriptExecutor, ISearchContext
     {
         string xPath = driver.GetElementXPath(element);
 
@@ -61,5 +63,11 @@ public static class WebDriverExtensions
                 xPath = xPath[..lastSlash];
         }
         return driver.FindElement(By.XPath(xPath));
+    }
+
+    public static string CreateNewWindow<T>(this T driver) where T : IJavaScriptExecutor, IWebDriver
+    {
+        driver.ExecuteScript("window.open();");
+        return driver.WindowHandles.Last();
     }
 }
