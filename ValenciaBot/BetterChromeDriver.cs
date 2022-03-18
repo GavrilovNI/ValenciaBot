@@ -22,7 +22,7 @@ public class BetterChromeDriver : IWebDriver, IDisposable, IJavaScriptExecutor
 
             if(CheckDriverIfReachable() == false)
             {
-                _driver.Quit();
+                _driver?.Quit();
                 _driver = null;
                 Open();
             }

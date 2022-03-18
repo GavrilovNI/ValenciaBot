@@ -37,7 +37,7 @@ public class Appointments : DriverWithDialogs<BetterChromeDriver>
         IWebElement phoneElementParent2 = _driver.GetElementParent(phoneElement, 2)!;
         if(phoneElementParent2.GetAttribute("className") != "form-group ng-hide")
         {
-            _logger.LogError("Appointments page loaded wrong. Reopening");
+            _logger.LogError($"{nameof(Appointments)} page loaded wrong. Reopening");
             Reload();
         }
     }

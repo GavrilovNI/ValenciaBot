@@ -75,7 +75,7 @@ public class Program
 
         DateOnly beforeDate = new(2022, 6, 13);
 
-        //CreateTelegramBot();
+        CreateTelegramBot();
         _programs = new Program[]
         {
             new Program(info, beforeDate),

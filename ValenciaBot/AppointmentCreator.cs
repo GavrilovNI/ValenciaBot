@@ -159,9 +159,19 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>
         _driver.SetTab(_currentTab);
 
         _driver.Navigate().GoToUrl(_url);
-        _driver.Wait(TimeoutForLoading);
+        //_driver.Wait(TimeoutForLoading);
 
-        UpdateDatePicker();
+        SelectElement serviceSelector = _driver!.GetSelector(By.Id("servicios"));
+        if(serviceSelector.Options.Count <= 1)
+        {
+            _logger.LogError($"{nameof(AppointmentCreator)} page loaded wrong. Reopening");
+            Reload();
+        }
+        else
+        {
+            UpdateDatePicker();
+        }
+
         _logger.StopMethod();
     }
 
