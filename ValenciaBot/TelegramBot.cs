@@ -12,12 +12,12 @@ namespace ValenciaBot;
 
 public class TelegramBot : IDisposable
 {
-    private TelegramBotClient _client;
-    private CancellationTokenSource _cancellationToken = new();
+    private readonly TelegramBotClient _client;
+    private readonly CancellationTokenSource _cancellationToken = new();
 
-    private string _subscribersFilePath;
+    private readonly string _subscribersFilePath;
 
-    private HashSet<long> _subscribers = new();
+    private readonly HashSet<long> _subscribers = new();
 
     public TelegramBot(string token, string subscribersFilePath)
     {
@@ -49,7 +49,7 @@ public class TelegramBot : IDisposable
             await _client.SendTextMessageAsync(subscriber, message);
     }
 
-    public async void SendCurrentAppointmentInfoToSubscribers(Program program)
+    public void SendCurrentAppointmentInfoToSubscribers(Program program)
     {
         foreach(var subscriber in _subscribers)
             SendCurrentAppointmentInfoToSubscriber(program, subscriber);
@@ -64,7 +64,7 @@ public class TelegramBot : IDisposable
 
     public void Dispose() => _cancellationToken.Cancel();
 
-    public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+    public static Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
         var ErrorMessage = exception switch
         {
@@ -95,7 +95,7 @@ public class TelegramBot : IDisposable
     }
 
 
-    private async Task BotOnMessageReceived(ITelegramBotClient botClient, Message message)
+    private async Task BotOnMessageReceived(ITelegramBotClient _, Message message)
     {
         long subscriberId = message.Chat.Id;
         bool added = AddSubscriber(subscriberId);
@@ -105,7 +105,7 @@ public class TelegramBot : IDisposable
             SendCurrentAppointmentInfoToSubscriber(program, subscriberId);
     }
 
-    private static Task UnknownUpdateHandlerAsync(ITelegramBotClient botClient, Update update)
+    private static Task UnknownUpdateHandlerAsync(ITelegramBotClient _, Update update)
     {
         Console.WriteLine($"Unknown update type: {update.Type}");
         return Task.CompletedTask;

@@ -9,7 +9,7 @@ namespace ValenciaBot;
 
 public class Dialog
 {
-    private IWebElement _dialog;
+    private readonly IWebElement _dialog;
 
     public IWebElement WebElement => _dialog;
 

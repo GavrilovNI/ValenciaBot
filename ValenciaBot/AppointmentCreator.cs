@@ -7,7 +7,7 @@ using ValenciaBot.WebDriverExtensions;
 
 namespace ValenciaBot;
 
-public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>
+public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
 {
     private readonly string _url = "http://www.valencia.es/QSIGE/apps/citaprevia/index.html#!/newAppointment/";
 
@@ -15,12 +15,91 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>
     public bool Opened => TabExists && _currentTab == _driver.CurrentTab;
     private bool TabExists => _driver.TabExists(_currentTab);
 
-    private DatePicker? _datePicker;
     private const int _minTimeZone = -12; // min world time zone
+
+    private SelectElement? _serviceSelector;
+    private SelectElement? _centerSelector;
+    private DatePicker? _datePicker;
+    private SelectElement? _timeSelector;
+    private IWebElement? _nameField;
+    private IWebElement? _surnameField;
+    private SelectElement? _documentTypeSelector;
+    private IWebElement? _documentField;
+    private IWebElement? _phoneNumberField;
+    private IWebElement? _emailField;
+
+    private IWebElement? _submitButton;
 
     public AppointmentCreator(BetterChromeDriver driver) : base(driver)
     {
         
+    }
+
+    public void FillPersonInfo(PersonInfo info)
+    {
+        _logger.StartMethod(info);
+        Open();
+
+        Name = info.Name;
+        SurName = info.Surname;
+        DocumentType = info.DocumentType;
+        Document = info.Document;
+        PhoneNumber = info.PhoneNumber;
+        Email = info.Email;
+
+        _logger.StopMethod();
+    }
+
+    public bool TrySelectlocation(LocationInfo info)
+    {
+        _logger.StartMethod(info);
+
+        Service = info.Service;
+        Center = info.Center;
+        bool result = TryGetInfoDialog(out Dialog? dialog) == false;
+        dialog?.Close();
+
+        _logger.StopMethod(result);
+        return result;
+    }
+
+    public bool TrySelectDateTime(DateOnly exactDate, out DateTime appointmentDateTime)
+    {
+        _logger.StartMethod(exactDate);
+        _datePicker!.Open();
+        var result = _datePicker!.IsDayAvaliable(exactDate);
+        if(result)
+        {
+            _datePicker!.PickDay(exactDate);
+            TimeOnly selectedTime = SelectTime(1); // 0 - none; 1,2,3... avaliable times
+            appointmentDateTime = exactDate.ToDateTime(selectedTime);
+        }
+        else
+        {
+            appointmentDateTime = DateTime.UnixEpoch;
+        }
+        _datePicker!.Close();
+
+        _logger.StopMethod(result, appointmentDateTime);
+        return result;
+    }
+
+    public bool TrySetLocationAndDateTime(LocationInfo info,
+                                          DateOnly exactDate,
+                                          out DateTime appointmentDateTime)
+    {
+        _logger.StartMethod(info, exactDate);
+
+        Open();
+
+        bool result = TrySelectlocation(info);
+        if(result)
+            result = TrySelectDateTime(exactDate, out appointmentDateTime);
+        else
+            appointmentDateTime = DateTime.UnixEpoch;
+
+        _logger.StopMethod(result, appointmentDateTime);
+        return result;
     }
 
     public DateOnly? GetFirstAvaliableDate(LocationInfo location,
@@ -30,86 +109,48 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>
         Reload();
 
         DateOnly? result = null;
-        SelectService(location.Service);
-        if(TrySelectCenter(location.Center))
+        if(TrySelectlocation(location))
         {
             _datePicker!.Open();
             bool found = _datePicker.TryGetFirstAvaliableDay(out DateOnly dateTime, DateTime.UtcNow.AddHours(_minTimeZone).ToDateOnly(), beforeDate);
-            _datePicker!.Close();
+            _datePicker.Close();
 
             result = found ? dateTime : null;
         }
-
         _logger.StopMethod(result!);
 
         return result;
     }
 
+
     public bool CreateAppointmentByExactDate(AppointmentInfo info,
                                              DateOnly exactDate,
                                              out DateTime appointmentDateTime)
     {
-        Open();
-
         _logger.StartMethod(info, exactDate);
 
-        appointmentDateTime = exactDate.ToDateTime();
+        Reload();
 
-        try
+        if(TrySetLocationAndDateTime(info.Location, exactDate, out appointmentDateTime))
         {
-            SelectService(info.Location.Service);
-            if(TrySelectCenter(info.Location.Center) == false)
-            {
-                _logger.StopMethod(false);
-                return false;
-            }
-            _datePicker!.Open();
-            bool dayAvaliable = _datePicker!.IsDayAvaliable(exactDate);
-            if(dayAvaliable)
-            {
-                _datePicker!.PickDay(exactDate);
-            }
-            else
-            {
-                _logger.StopMethod(false, "Day is not avaliable");
-                return false;
-            }
-
-            DateOnly choosenDate = exactDate;
-            TimeOnly selectedTime = SelectTime(1); // 0 - none; 1,2,3... avaliable times
-
-            SetName(info.Name, info.Surname);
-            SelectDocumentType(info.DocumentType);
-            SetDocument(info.Document);
-            SetPhoneNumber(info.PhoneNumber);
-            SetEmail(info.Email);
-
-            appointmentDateTime = choosenDate.ToDateTime(selectedTime);
+            FillPersonInfo(info.PersonInfo);
 
             var result = TrySubmit();
+            if(result)
+                Reload();
             _logger.StopMethod(result, appointmentDateTime);
             return result;
         }
-        catch(Exception ex)
-        {
-            _logger.StopMethod(false, ex);
-            _logger.LogError("Exception while creating record: " + ex.Message + " " + ex.StackTrace);
-            return false;
-        }
-        finally
-        {
-            Close();
-        }
+        _logger.StopMethod(false, appointmentDateTime);
+        return false;
     }
 
     public bool CreateAppointment(AppointmentInfo info,
                                   DateOnly beforeDate,
                                   out DateTime appointmentDateTime)
     {
-        Open();
-
         _logger.StartMethod(info, beforeDate);
-
+        Reload();
         appointmentDateTime = beforeDate.ToDateTime();
 
         try
@@ -122,18 +163,22 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>
             }
             else
             {
-                return CreateAppointmentByExactDate(info, firstAvaliableDay.Value, out appointmentDateTime);
+                var result = TrySetLocationAndDateTime(info.Location, firstAvaliableDay.Value, out appointmentDateTime);
+                if(result)
+                {
+                    FillPersonInfo(info.PersonInfo);
+                    result = TrySubmit();
+                }
+                _logger.StopMethod(result);
+                return result;
             }
         }
         catch (Exception ex)
         {
-            _logger.StopMethod(false, ex);
-            _logger.LogError("Exception while creating record: " + ex.Message + " " + ex.StackTrace);
-            return false;
-        }
-        finally
-        {
             Close();
+            _logger.LogError("Exception while creating record: " + ex.Message + " " + ex.StackTrace);
+            _logger.StopMethod(false, ex);
+            return false;
         }
     }
 
@@ -159,17 +204,20 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>
         _driver.SetTab(_currentTab);
 
         _driver.Navigate().GoToUrl(_url);
-        //_driver.Wait(TimeoutForLoading);
 
-        SelectElement serviceSelector = _driver!.GetSelector(By.Id("servicios"));
+        WaitLoading(out Dialog _);
+
+        SelectElement serviceSelector = _driver!.FindSelector(By.Id("servicios"));
         if(serviceSelector.Options.Count <= 1)
         {
+            var x = serviceSelector.Options;
+            var c = serviceSelector.Options.Count;
             _logger.LogError($"{nameof(AppointmentCreator)} page loaded wrong. Reopening");
             Reload();
         }
         else
         {
-            UpdateDatePicker();
+            UpdateElements();
         }
 
         _logger.StopMethod();
@@ -186,120 +234,175 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>
         _logger.StopMethod();
     }
 
-    private void UpdateDatePicker()
+    private void UpdateElements()
     {
         _logger.StartMethod();
 
-        IWebElement showCalendarButton = _driver!.FindElement(By.XPath("//*[@id=\"datetimepicker2\"]/div/button"));
-        IWebElement dropdown = _driver!.FindElement(By.XPath("//*[@id=\"appointmentForm\"]/div[7]/div/div"));
+        _serviceSelector = _driver.FindSelector(By.Id("servicios"));
+        _centerSelector = _driver.FindSelector(By.Id("centros"));
+        _datePicker = new DatePicker(_driver, this, By.XPath("//*[@id=\"appointmentForm\"]/div[7]/div/div"));
+        _timeSelector = _driver.FindSelector(By.Id("hora"));
+        _nameField = _driver.FindElement(By.Id("nameInput"));
+        _surnameField = _driver.FindElement(By.Id("surnameInput"));
+        _documentTypeSelector = _driver.FindSelector(By.Id("tipoDocumentos"));
+        _documentField = _driver.FindElement(By.Id("nifInput"));
+        _phoneNumberField = _driver.FindElement(By.Id("tlfnoInput"));
+        _emailField = _driver.FindElement(By.Id("emailInput"));
 
-        _datePicker = new DatePicker(showCalendarButton, dropdown);
-
-        _logger.StopMethod();
-    }
-
-    private void SelectService(string text)
-    {
-        _logger.StartMethod(text);
-
-        SelectElement serviceSelector = _driver!.GetSelector(By.Id("servicios"));
-        serviceSelector.SelectByText(text);
+        _submitButton = _driver!.FindElement(By.XPath("//*[@id=\"appointmentForm\"]/div[20]/div/button[1]"));
 
         _logger.StopMethod();
     }
 
-    private bool TrySelectCenter(string text)
+    private void SetSelectorValueByIndex(SelectElement selector, int index)
     {
-        _logger.StartMethod(text);
+        _logger.StartMethod(selector, index);
+        selector.SelectByIndex(index);
+        _logger.StopMethod();
+    }
 
-        SelectElement centerSelector = _driver!.GetSelector(By.Id("centros"));
-        centerSelector.SelectByText(text);
+    private int GetSelectorValueIndex(SelectElement selector)
+    {
+        _logger.StartMethod(selector);
 
-        var result = TryGetInfoDialog(out Dialog? _) == false;
+        var result = -1;
+        for(int i = 0; i < selector.Options.Count; i++)
+        {
+            if(_driver.ElementsEqual(selector.Options[i], selector.SelectedOption))
+            {
+                result = i;
+                break;
+            }
+        }
+
         _logger.StopMethod(result);
         return result;
+    }
+
+    private void SetSelectorValueByText(SelectElement selector, string value)
+    {
+        _logger.StartMethod(selector, value);
+        selector.SelectByText(value);
+        _logger.StopMethod();
+    }
+
+    private string GetSelectorValueText(SelectElement selector)
+    {
+        _logger.StartMethod(selector);
+        var result = selector.SelectedOption.GetAttribute("innerHTML");
+        _logger.StopMethod(result);
+        return result;
+    }
+
+    private void SetTextFieldValue(IWebElement inputField, string value)
+    {
+        _logger.StartMethod(inputField, value);
+        inputField.Clear();
+        inputField.SendKeys(value);
+        _logger.StopMethod();
+    }
+
+    private string GetTextFieldValue(IWebElement inputField)
+    {
+        _logger.StartMethod(inputField);
+        var result = inputField.GetAttribute("value");
+        _logger.StopMethod(result);
+        return result;
+    }
+
+    private string Service
+    {
+        get => GetSelectorValueText(_serviceSelector!);
+        set
+        {
+            SetSelectorValueByText(_serviceSelector!, value);
+            WaitLoading(out Dialog _);
+        }
+    }
+
+    private string Center
+    {
+        get => GetSelectorValueText(_centerSelector!);
+        set
+        {
+            SetSelectorValueByText(_centerSelector!, value);
+            WaitLoading(out Dialog _);
+        }
+    }
+
+    private int TimeIndex
+    {
+        get => GetSelectorValueIndex(_timeSelector!);
+        set
+        {
+            SetSelectorValueByIndex(_timeSelector!, value);
+            WaitLoading(out Dialog _);
+        }
     }
 
     private TimeOnly SelectTime(int index)
     {
         _logger.StartMethod(index);
 
-        SelectElement timeSelector = _driver!.GetSelector(By.Id("hora"));
-        timeSelector.SelectByIndex(index);
-        var time = timeSelector.Options[index].GetAttribute("label");
+        TimeIndex = index;
+        var time = _timeSelector!.Options[index].GetAttribute("label");
         
         var result = TimeOnly.ParseExact(time, "HH:mm", CultureInfo.InvariantCulture);
         _logger.StopMethod(result);
         return result;
     }
 
-    private void SetName(string name, string surname)
+
+    private string SurName
     {
-        _logger.StartMethod(name, surname);
-
-        IWebElement nameElement = _driver!.FindElement(By.Id("nameInput"));
-        IWebElement surnameElement = _driver.FindElement(By.Id("surnameInput"));
-
-        nameElement.Clear();
-        surnameElement.Clear();
-        nameElement.SendKeys(name);
-        surnameElement.SendKeys(surname);
-
-        _logger.StopMethod();
+        get => GetTextFieldValue(_surnameField!);
+        set => SetTextFieldValue(_surnameField!, value);
     }
 
-    private void SelectDocumentType(string text)
+    private string Name
     {
-        _logger.StartMethod(text);
-
-        SelectElement documentTypeSelector = _driver!.GetSelector(By.Id("tipoDocumentos"));
-        documentTypeSelector.SelectByText(text);
-
-        _logger.StopMethod();
+        get => GetTextFieldValue(_nameField!);
+        set => SetTextFieldValue(_nameField!, value);
     }
 
-
-    private void SetDocument(string document)
+    private string DocumentType
     {
-        _logger.StartMethod(document);
-
-        IWebElement documentElement = _driver!.FindElement(By.Id("nifInput"));
-        documentElement.Clear();
-        documentElement.SendKeys(document);
-
-        _logger.StopMethod();
+        get => GetSelectorValueText(_documentTypeSelector!);
+        set => SetSelectorValueByText(_documentTypeSelector!, value);
     }
 
-    private void SetPhoneNumber(string phoneNumber)
+    private string Document
     {
-        _logger.StartMethod(phoneNumber);
-
-        IWebElement phoneNumberElement = _driver!.FindElement(By.Id("tlfnoInput"));
-        phoneNumberElement.Clear();
-        phoneNumberElement.SendKeys(phoneNumber);
-
-        _logger.StopMethod();
+        get => GetTextFieldValue(_documentField!);
+        set => SetTextFieldValue(_documentField!, value);
     }
 
-    private void SetEmail(string email)
+    private string PhoneNumber
     {
-        _logger.StartMethod(email);
-
-        IWebElement emailElement = _driver!.FindElement(By.Id("emailInput"));
-        emailElement.Clear();
-        emailElement.SendKeys(email);
-
-        _logger.StopMethod();
+        get => GetTextFieldValue(_phoneNumberField!);
+        set => SetTextFieldValue(_phoneNumberField!, value);
     }
 
-    private bool TrySubmit()
+    private string Email
+    {
+        get => GetTextFieldValue(_emailField!);
+        set => SetTextFieldValue(_emailField!, value);
+    }
+
+    public bool TrySubmit()
     {
         _logger.StartMethod();
 
-        IWebElement submitButton = _driver!.FindElement(By.XPath("//*[@id=\"appointmentForm\"]/div[20]/div/button[1]"));
-        submitButton.Submit();
+        if(Opened == false)
+            return false;
 
-        var result = TryGetInfoDialog(out Dialog? _) == false;
+        _submitButton!.Submit();
+
+        var dialogFound = TryGetInfoDialog(out Dialog? dialog);
+        if(dialogFound)
+            dialog!.Close();
+        //wait for page loading here if you dont use TryGetInfoDialog
+        var result = dialogFound == false && _driver.Url != _url;
         _logger.StopMethod(result);
         return result;
     }

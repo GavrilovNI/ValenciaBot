@@ -12,7 +12,8 @@ public class DriverWithDialogs<T> where T : IWebDriver
 {
     protected ClassLogger _logger;
 
-    public const int TimeoutForLoading = 1000;
+    public const int PreDelay = 500;
+    public const int DeltaDelay = 200;
     protected T _driver;
 
     public DriverWithDialogs(T driver)
@@ -21,12 +22,13 @@ public class DriverWithDialogs<T> where T : IWebDriver
         _logger = new(GetType().Name);
     }
 
-    protected void WaitLoading(out Dialog? otherDialog, int delay = TimeoutForLoading)
+    protected void WaitLoading(out Dialog? otherDialog, int preDelay = PreDelay, int deltaDelay = DeltaDelay, int times = 3)
     {
-        _logger.StartMethod(delay);
+        _logger.StartMethod(preDelay, deltaDelay);
+        _driver!.Wait(preDelay);
         while(true)
         {
-            _driver!.Wait(delay);
+            _driver!.Wait(deltaDelay);
             if(TryGetDialog(out Dialog? dialog))
             {
                 if(dialog!.Created)
@@ -50,6 +52,9 @@ public class DriverWithDialogs<T> where T : IWebDriver
             }
             else
             {
+                if(--times > 0)
+                    continue;
+
                 otherDialog = null;
                 _logger.StopMethod();
                 return;

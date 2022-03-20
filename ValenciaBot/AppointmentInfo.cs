@@ -26,7 +26,7 @@ public record LocationInfo
 
     public override string ToString()
     {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new();
         sb.Append($"{nameof(Service)}: '{Service}', ");
         sb.Append($"{nameof(Center)}: '{Center}'");
 
@@ -34,9 +34,8 @@ public record LocationInfo
     }
 }
 
-public record AppointmentInfo
+public record PersonInfo
 {
-    public LocationInfo Location { get; init; }
     public string Name { get; init; }
     public string Surname { get; init; }
     public string DocumentType { get; init; }
@@ -44,9 +43,8 @@ public record AppointmentInfo
     public string PhoneNumber { get; init; }
     public string Email { get; init; }
 
-    public AppointmentInfo()
+    public PersonInfo()
     {
-        Location = new LocationInfo();
         Name = "";
         Surname = "";
         DocumentType = "";
@@ -55,9 +53,8 @@ public record AppointmentInfo
         Email = "";
     }
 
-    public AppointmentInfo(AppointmentInfo other)
+    public PersonInfo(PersonInfo other)
     {
-        Location = new LocationInfo(other.Location);
         Name = other.Name;
         Surname = other.Surname;
         DocumentType = other.DocumentType;
@@ -68,14 +65,40 @@ public record AppointmentInfo
 
     public override string ToString()
     {
-        StringBuilder sb = new StringBuilder();
-        sb.Append($"{Location}, ");
+        StringBuilder sb = new();
         sb.Append($"{nameof(Name)}: '{Name}', ");
         sb.Append($"{nameof(Surname)}: '{Surname}', ");
         sb.Append($"{nameof(DocumentType)}: '{DocumentType}', ");
         sb.Append($"{nameof(Document)}: '{Document}', ");
         sb.Append($"{nameof(PhoneNumber)}: '{PhoneNumber}', ");
         sb.Append($"{nameof(Email)}: '{Email}'");
+
+        return sb.ToString();
+    }
+}
+
+public record AppointmentInfo
+{
+    public LocationInfo Location { get; init; }
+    public PersonInfo PersonInfo { get; init; }
+
+    public AppointmentInfo()
+    {
+        Location = new LocationInfo();
+        PersonInfo = new PersonInfo();
+    }
+
+    public AppointmentInfo(AppointmentInfo other)
+    {
+        Location = new LocationInfo(other.Location);
+        PersonInfo = new PersonInfo(other.PersonInfo);
+    }
+
+    public override string ToString()
+    {
+        StringBuilder sb = new();
+        sb.Append($"{Location}, ");
+        sb.Append($"{PersonInfo}");
 
         return sb.ToString();
     }

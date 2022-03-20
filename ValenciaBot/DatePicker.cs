@@ -5,49 +5,64 @@ using ValenciaBot.DateTimeExtensions;
 
 namespace ValenciaBot;
 
-public class DatePicker
+public class DatePicker : DriverWithDialogs<IWebDriver>
 {
-    private readonly IWebElement _showCalendarButton;
-    private readonly IWebElement _dropdown;
+    private const string _activeClass = "day ng-binding ng-scope active";
+    private const string _avaliableClass = "day ng-binding ng-scope";
+    private const string _unavaliableClass = "day ng-binding ng-scope disabled";
+    private const string _pastDaysClass = "day ng-binding ng-scope past disabled";
+    private const string _currenDayClass = "day ng-binding ng-scope current disabled";
 
-    private readonly IWebElement _table;
+    private readonly ITab _iTab;
+    private readonly By _dropdownBy;
 
-    private readonly IWebElement _yearAndMonthButton;
-    private readonly IWebElement _leftArrow;
-    private readonly IWebElement _rightArrow;
+    private IWebElement Dropdown
+    {
+        get
+        {
+            _iTab.Open();
+            return _driver.FindElement(_dropdownBy);
+        }
+    }
 
-    public bool IsOpen => _dropdown.GetAttribute("className") == "dropdown open";
+    private IWebElement ShowCalendarButton => Dropdown.FindElement(By.XPath("a/div/div/button"));
+
+    private IWebElement Table => Dropdown.FindElement(By.XPath("ul/div/table"));
+
+    private IWebElement YearAndMonthButton => Table.FindElement(By.XPath("thead/tr[1]/th[2]"));
+    private IWebElement LeftArrow => Table.FindElement(By.XPath("thead/tr[1]/th[1]"));
+    private IWebElement RightArrow => Table.FindElement(By.XPath("thead/tr[1]/th[3]"));
+
+    public bool IsOpen => Dropdown.GetAttribute("className") == "dropdown open";
+    public bool DayPicked => Dropdown.FindElement(By.XPath("a/div/input")).GetAttribute("className").Contains("ng-empty") == false;
 
     private (int x, int y) _calendarSize = (7, 6);
 
     private readonly string[] _monthAbbreviations = new string[12] { "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic" };
 
-    public DatePicker(IWebElement showCalendarButton, IWebElement dropdown)
+    public DatePicker(IWebDriver driver, ITab iTab, By dropdownBy) : base(driver)
     {
-        _showCalendarButton = showCalendarButton;
-        _dropdown = dropdown;
-
-        _table = _dropdown.FindElement(By.XPath("ul/div/table"));
-        _yearAndMonthButton = _table.FindElement(By.XPath("thead/tr[1]/th[2]"));
-        _leftArrow = _table.FindElement(By.XPath("thead/tr[1]/th[1]"));
-        _rightArrow = _table.FindElement(By.XPath("thead/tr[1]/th[3]"));
+        _logger.StartMethod(driver, iTab, dropdownBy);
+        _iTab = iTab;
+        _dropdownBy = dropdownBy;
+        _logger.StopMethod();
     }
 
     public void Open()
     {
         if(IsOpen == false)
-            _showCalendarButton.Click();
+            ShowCalendarButton.Click();
     }
 
     public void Close()
     {
         if(IsOpen)
-            _showCalendarButton.Click();
+            ShowCalendarButton.Click();
     }
 
     public DateOnly GetCurrentYearAndMonth()
     {
-        string stringDate = _yearAndMonthButton.Text;
+        string stringDate = YearAndMonthButton.Text;
         string stringYear = stringDate[..4];
         string stringMonth = stringDate.Substring(5, 3);
 
@@ -63,19 +78,19 @@ public class DatePicker
 
     public void MoveToNextMonth()
     {
-        _rightArrow.Click();
+        RightArrow.Click();
     }
 
     public void MoveToPrevMonth()
     {
-        _leftArrow.Click();
+        LeftArrow.Click();
     }
 
     public void GoToYearAndMonth(DateOnly dateTime)
     {
         DateOnly currentDateTime = GetCurrentYearAndMonth();
         int monthDifference = currentDateTime.MonthDifference(dateTime);
-        IWebElement button = monthDifference > 0 ? _rightArrow : _leftArrow;
+        IWebElement button = monthDifference > 0 ? RightArrow : LeftArrow;
         monthDifference = (int)MathF.Abs(monthDifference);
 
         for(int i = 0; i < monthDifference; i++)
@@ -89,13 +104,14 @@ public class DatePicker
     }
     private IWebElement GetDayButton(int x, int y)
     {
-        return _table.FindElement(By.XPath($"tbody/tr[{y + 1}]/td[{x + 1}]"));
+        return Table.FindElement(By.XPath($"tbody/tr[{y + 1}]/td[{x + 1}]"));
     }
 
     public void PickDay(DateOnly dateOnly)
     {
         GoToYearAndMonth(dateOnly);
-        GetDayButton(dateOnly.Day).Click();
+        PickDay(dateOnly.Day);
+        WaitLoading(out Dialog _);
     }
 
     private void PickDay(int day)
@@ -175,20 +191,14 @@ public class DatePicker
 
     private bool IsDayAvaliable(int x, int y)
     {
-        string avaliableClass = "day ng-binding ng-scope";
-        string unavaliableClass = "day ng-binding ng-scope disabled";
-        string pastDaysClass = "day ng-binding ng-scope past disabled";
-        string currenDayClass = "day ng-binding ng-scope current disabled";
-
         string currentClass = GetDayButton(x, y).GetAttribute("class");
 
-        if(currentClass == avaliableClass)
+        if(currentClass == _avaliableClass || currentClass == _activeClass)
             return true;
-        else if(currentClass == pastDaysClass || currentClass == currenDayClass || currentClass == unavaliableClass)
+        else if(currentClass == _pastDaysClass || currentClass == _currenDayClass || currentClass == _unavaliableClass)
             return false;
         else
             throw new InvalidElementStateException("Day button has unknown class.");
-
     }
 
     private (int x, int y) GetPositionOfFirstDay()

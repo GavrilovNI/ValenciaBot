@@ -9,7 +9,7 @@ using ValenciaBot.WebDriverExtensions;
 
 namespace ValenciaBot;
 
-public class Appointments : DriverWithDialogs<BetterChromeDriver>
+public class Appointments : DriverWithDialogs<BetterChromeDriver>, ITab
 {
     private string _settedDocument = "";
     public string CurrentDocument { get; private set; } = "";
@@ -20,10 +20,24 @@ public class Appointments : DriverWithDialogs<BetterChromeDriver>
     public bool Opened => TabExists && _currentTab == _driver.CurrentTab;
     private bool TabExists => _driver.TabExists(_currentTab);
 
+    private IWebElement? _documentField;
+    private IWebElement? _submitButton;
+
     public Appointments(BetterChromeDriver driver) : base(driver)
     {
         
     }
+
+    private void UpdateElements()
+    {
+        _logger.StartMethod();
+
+        _documentField = _driver.FindElement(By.Id("nif"));
+        _submitButton = _driver!.FindElement(By.XPath("html/body/div[2]/div/div[3]/div/div/div[1]/div[2]/form/div[3]/button"));
+
+        _logger.StopMethod();
+    }
+
 
     public void Reload()
     {
@@ -33,12 +47,15 @@ public class Appointments : DriverWithDialogs<BetterChromeDriver>
         _driver.SetTab(_currentTab);
         _driver.Navigate().GoToUrl(_url);
 
-        IWebElement phoneElement = _driver.FindElement(By.Id("txtTelefono"));
-        IWebElement phoneElementParent2 = _driver.GetElementParent(phoneElement, 2)!;
+        IWebElement phoneElementParent2 = _driver.GetElementParent(_driver.FindElement(By.Id("txtTelefono")), 2)!;
         if(phoneElementParent2.GetAttribute("className") != "form-group ng-hide")
         {
             _logger.LogError($"{nameof(Appointments)} page loaded wrong. Reopening");
             Reload();
+        }
+        else
+        {
+            UpdateElements();
         }
     }
 
@@ -173,19 +190,14 @@ public class Appointments : DriverWithDialogs<BetterChromeDriver>
         SetDocument(document);
         SubmitDocument();
 
-        _driver!.Wait(TimeoutForLoading);
-
-        WaitLoading(out Dialog _);
-
         _logger.StopMethod();
     }
 
     private void SetDocument(string document)
     {
         _logger.StartMethod(document);
-        IWebElement documentElement = _driver!.FindElement(By.Id("nif"));
-        documentElement.Clear();
-        documentElement.SendKeys(document);
+        _documentField!.Clear();
+        _documentField.SendKeys(document);
         _settedDocument = document;
         _logger.StopMethod();
     }
@@ -193,8 +205,8 @@ public class Appointments : DriverWithDialogs<BetterChromeDriver>
     private void SubmitDocument()
     {
         _logger.StartMethod();
-        IWebElement submitButton = _driver!.FindElement(By.XPath("html/body/div[2]/div/div[3]/div/div/div[1]/div[2]/form/div[3]/button"));
-        submitButton.Submit();
+        _submitButton!.Submit();
+        WaitLoading(out Dialog _);
         CurrentDocument = _settedDocument;
         _logger.StopMethod();
     }

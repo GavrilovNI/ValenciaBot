@@ -22,6 +22,7 @@ public class BetterChromeDriver : IWebDriver, IDisposable, IJavaScriptExecutor
 
             if(CheckDriverIfReachable() == false)
             {
+                Program.Bot?.SendMessageToSubscribers("Watch your computer.");
                 _driver?.Quit();
                 _driver = null;
                 Open();
@@ -124,13 +125,13 @@ public class BetterChromeDriver : IWebDriver, IDisposable, IJavaScriptExecutor
 
     public void Close()
     {
+        Program.Bot?.SendMessageToSubscribers("Watch your computer.");
         if(CheckDriverIfReachable() == false)
             return;
         FixTabs();
-        int tabsCount = TabsCount;
-        for(int i = 0; i < tabsCount; i++)
-            Driver!.Close();
-        Driver!.Quit();
+        while(TabsCount > 0)
+            Driver?.Close();
+        Driver?.Quit();
         Driver = null;
     }
 

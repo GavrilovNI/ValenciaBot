@@ -17,7 +17,12 @@ public static class WebDriverExtensions
         wait.Until(wd => DateTime.Now >= end);
     }
 
-    public static SelectElement GetSelector(this ISearchContext context, By by)
+    public static bool ElementsEqual(this IJavaScriptExecutor executor, IWebElement a, IWebElement b)
+    {
+        return executor.GetElementXPath(a) == executor.GetElementXPath(b);
+    }
+
+    public static SelectElement FindSelector(this ISearchContext context, By by)
     {
         IWebElement selectorElement = context.FindElement(by);
         return new SelectElement(selectorElement);

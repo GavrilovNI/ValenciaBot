@@ -21,7 +21,7 @@ public class Program
     private static readonly string _telegramBotSunscribersFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\botSubs.txt";
     private static readonly string _telegramBotTokenFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\telegramBotToken.txt";
 
-    private static TelegramBot? _bot;
+    public static TelegramBot? Bot { get; private set; }
 
     private static void CreateTelegramBot()
     {
@@ -29,8 +29,8 @@ public class Program
         if(File.Exists(telegramBotTokenFileFullPath))
         {
             string botToken = File.ReadAllLines(telegramBotTokenFileFullPath)[0];
-            _bot = string.IsNullOrEmpty(botToken) ? null : new TelegramBot(botToken, _telegramBotSunscribersFile);
-            if(_bot == null)
+            Bot = string.IsNullOrEmpty(botToken) ? null : new TelegramBot(botToken, _telegramBotSunscribersFile);
+            if(Bot == null)
                 _logger.LogWarning("Telegram bot was not created. Token inside token file not found. It should be placed on first line");
             else
                 _logger.Log($"Telegram bot created. Token: '{botToken}'");
@@ -43,20 +43,6 @@ public class Program
 
     public static void Main()
     {
-        AppointmentInfo testInfo = new AppointmentInfo()
-        {
-            Location = new LocationInfo()
-            {
-                Service = "ATENCION ESPECIALIZADA-LICENCIAS, INOCUAS,CONTENEDORES",
-                Center = "JUNTA DE DISTRITO ABASTOS",
-            },
-            Name = "Name",
-            Surname = "Surname",
-            DocumentType = "Pasaporte",
-            Document = "761234566",
-            PhoneNumber = "681123456",
-            Email = "email@email.com"
-        };
 
         AppointmentInfo info = new()
         {
@@ -65,13 +51,26 @@ public class Program
                 Service = "PADRON CP - Periodista Azzati",
                 Center = "PADRON Periodista Azzati 2",
             },
-            Name = "Name",
-            Surname = "Surname",
-            DocumentType = "Pasaporte",
-            Document = "761234566",
-            PhoneNumber = "681123456",
-            Email = "email@email.com"
+            PersonInfo = new PersonInfo()
+            {
+                Name = "Name",
+                Surname = "Surname",
+                DocumentType = "Pasaporte",
+                Document = "761234566",
+                PhoneNumber = "681123456",
+                Email = "email@email.com"
+            }
         };
+
+        AppointmentInfo testInfo = info with
+        {
+            Location = new LocationInfo()
+            {
+                Service = "ATENCION ESPECIALIZADA-LICENCIAS, INOCUAS,CONTENEDORES",
+                Center = "JUNTA DE DISTRITO ABASTOS",
+            }
+        };
+
 
         DateOnly beforeDate = new(2022, 6, 13);
 
@@ -89,13 +88,17 @@ public class Program
             //new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO TRANSITS"),
         };*/
 
-        _bot?.SendMessageToSubscribers("Bot started.");
+        //_bot?.SendMessageToSubscribers("Bot started.");
         foreach (Program program in Programs)
             program.Start();
+        while(true)
+        {
+
+        }
         Console.ReadKey();
         foreach(Program program in Programs)
             program.Stop();
-        _bot?.SendMessageToSubscribers("Bot stopped.");
+        Bot?.SendMessageToSubscribers("Bot stopped.");
     }
 
     public readonly AppointmentInfo Info;
@@ -104,7 +107,7 @@ public class Program
     private Appointments? _appointments;
     private AppointmentCreator? _creator;
 
-    private readonly int _delayInSeconds = 5;
+    private readonly int _delayInSeconds = 1;
     private System.Timers.Timer? _timer = null;
     public bool Running => _timer != null;
 
@@ -128,10 +131,10 @@ public class Program
         _logger.StartMethod();
         try
         {
-            DateTime? oldAppointment = _appointments!.GetAppointment(Info.Document, Info.Location)?.DateTime;
+            DateTime? oldAppointment = _appointments!.GetAppointment(Info.PersonInfo.Document, Info.Location)?.DateTime;
             if(oldAppointment == null && ExistingAppointment != null)
             {
-                _bot?.SendMessageToSubscribers("Warning: Existing appointment was removed since last check.");
+                Bot?.SendMessageToSubscribers("Warning: Existing appointment was removed since last check.");
                 _logger.LogWarning("Existing appointment was removed since last check");
             }
             ExistingAppointment = oldAppointment;
@@ -146,35 +149,41 @@ public class Program
             else
             {
                 _logger.Log($"Found avaliable date {avaliableDate}");
-                _bot?.SendMessageToSubscribers($"Found avaliable date {avaliableDate}.");
+                Bot?.SendMessageToSubscribers($"Found avaliable date {avaliableDate}.");
 
                 if(ExistingAppointment.HasValue)
                 {
-                    bool appointmentRemoved = _appointments!.TryRemoveAppointment(Info.Document, Info.Location);
+                    bool appointmentRemoved = _appointments!.TryRemoveAppointment(Info.PersonInfo.Document, Info.Location);
                     if(appointmentRemoved == false)
                     {
-                        _bot?.SendMessageToSubscribers("Error: Appointment was not removed. But it exists.");
+                        Bot?.SendMessageToSubscribers("Error: Appointment was not removed. But it exists.");
                         _logger.StopMethod(false, "Appointment was not removed. But it exists");
                         return false;
                     }
                 }
 
-                bool created = _creator.CreateAppointmentByExactDate(Info, avaliableDate.Value, out DateTime createdTime);
+                bool created = _creator.TrySelectDateTime(avaliableDate.Value, out DateTime createdTime);
                 if(created)
                 {
-                    DateTime? createdAppointmentDate = _appointments!.GetAppointment(Info.Document, Info.Location)?.DateTime;
+                    _creator.FillPersonInfo(Info.PersonInfo);
+                    created = _creator.TrySubmit();
+                }
+
+                if(created)
+                {
+                    DateTime? createdAppointmentDate = _appointments!.GetAppointment(Info.PersonInfo.Document, Info.Location)?.DateTime;
                     created = createdAppointmentDate == createdTime;
                 }
                 if(created)
                 {
                     ExistingAppointment = createdTime;
-                    _bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}. Info : {Info}'.");
+                    Bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}. Info : {Info}'.");
                     _logger.StopMethod(true, "----Created new appointment----", createdTime, Info);
                     return true;
                 }
                 else
                 {
-                    _bot?.SendMessageToSubscribers($"Error: Appointment was not created but time found. Found time: {avaliableDate}.");
+                    Bot?.SendMessageToSubscribers($"Error: Appointment was not created but time found. Found time: {avaliableDate}.");
                     _logger.StopMethod(false, "----Appointment was not created but time found----", avaliableDate);
                     return false;
                 }
@@ -182,7 +191,8 @@ public class Program
         }
         catch(Exception ex)
         {
-            _logger.LogError($"{ex.Message} {ex.StackTrace}");
+            Bot?.SendMessageToSubscribers("Watch your computer.");
+            _logger.LogError(ex.ToString());
             _driver.Close();
             _logger.StopMethod(false, ex);
             return false;
