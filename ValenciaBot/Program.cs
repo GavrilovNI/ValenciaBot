@@ -191,8 +191,9 @@ public class Program
         }
         catch(Exception ex)
         {
-            Bot?.SendMessageToSubscribers("Watch your computer.");
+            Bot?.SendMessageToSubscribers($"Caught exception: {ex.ToString()}");
             _logger.LogError(ex.ToString());
+            Thread.Sleep(1000);
             _driver.Close();
             _logger.StopMethod(false, ex);
             return false;

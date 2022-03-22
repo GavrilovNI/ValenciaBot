@@ -11,6 +11,8 @@ using ValenciaBot.WebDriverExtensions;
 namespace ValenciaBot;
 public class BetterChromeDriver : IWebDriver, IDisposable, IJavaScriptExecutor
 {
+    private ClassLogger _logger = new(nameof(BetterChromeDriver));
+
     private ChromeDriver? _driver = null;
 
     private ChromeDriver? Driver
@@ -20,13 +22,8 @@ public class BetterChromeDriver : IWebDriver, IDisposable, IJavaScriptExecutor
             if (_driver == null)
                 return null;
 
-            if(CheckDriverIfReachable() == false)
-            {
-                Program.Bot?.SendMessageToSubscribers("Watch your computer.");
-                _driver?.Quit();
-                _driver = null;
-                Open();
-            }
+            if(CheckIfDriverReachable() == false)
+                _logger.LogError("Driver is not reachable.");
             return _driver;
         }
         set => _driver = value;
@@ -98,7 +95,7 @@ public class BetterChromeDriver : IWebDriver, IDisposable, IJavaScriptExecutor
         }
     }
 
-    private bool CheckDriverIfReachable()
+    private bool CheckIfDriverReachable()
     {
         if(_driver == null)
             return false;
@@ -125,14 +122,16 @@ public class BetterChromeDriver : IWebDriver, IDisposable, IJavaScriptExecutor
 
     public void Close()
     {
-        Program.Bot?.SendMessageToSubscribers("Watch your computer.");
-        if(CheckDriverIfReachable() == false)
+        if(CheckIfDriverReachable() == false)
             return;
-        FixTabs();
-        while(TabsCount > 0)
-            Driver?.Close();
-        Driver?.Quit();
-        Driver = null;
+        int tabsCount = TabsCount;
+        for(int i = 0; i < tabsCount; i++)
+        {
+            _driver?.SwitchTo().Window(Driver?.WindowHandles[0]);
+            _driver?.Close();
+        }
+        _driver?.Quit();
+        _driver = null;
     }
 
     public bool TabExists(string tab)
@@ -170,6 +169,7 @@ public class BetterChromeDriver : IWebDriver, IDisposable, IJavaScriptExecutor
         {
             SetTab(tab);
             Driver!.Close();
+            Driver!.SwitchTo().Window(Driver?.WindowHandles[0]);
         }
     }
 
