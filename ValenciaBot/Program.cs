@@ -77,7 +77,7 @@ public class Program
         CreateTelegramBot();
         _programs = new Program[]
         {
-            new Program(info, beforeDate),
+            new Program(testInfo, beforeDate),
         };
         /*_programs = new Program[]
         {

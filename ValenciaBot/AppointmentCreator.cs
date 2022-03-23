@@ -66,17 +66,15 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
     public bool TrySelectDateTime(DateOnly exactDate, out DateTime appointmentDateTime)
     {
         _logger.StartMethod(exactDate);
+        appointmentDateTime = DateTime.UnixEpoch;
         _datePicker!.Open();
         var result = _datePicker!.IsDayAvaliable(exactDate);
         if(result)
         {
             _datePicker!.PickDay(exactDate);
-            TimeOnly selectedTime = SelectTime(1); // 0 - none; 1,2,3... avaliable times
-            appointmentDateTime = exactDate.ToDateTime(selectedTime);
-        }
-        else
-        {
-            appointmentDateTime = DateTime.UnixEpoch;
+            result = TrySelectTime(1, out TimeOnly selectedTime); // 0 - none; 1,2,3... avaliable times
+            if(result)
+                appointmentDateTime = exactDate.ToDateTime(selectedTime);
         }
         _datePicker!.Close();
 
@@ -344,15 +342,28 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
         }
     }
 
-    private TimeOnly SelectTime(int index)
+    private bool TrySelectTime(int index, out TimeOnly timeOnly)
     {
         _logger.StartMethod(index);
 
-        TimeIndex = index;
-        var time = _timeSelector!.Options[index].GetAttribute("label");
-        
-        var result = TimeOnly.ParseExact(time, "HH:mm", CultureInfo.InvariantCulture);
-        _logger.StopMethod(result);
+        var options = _timeSelector!.Options;
+        timeOnly = new();
+        bool result = false;
+        if(index >= 0 && index < options.Count)
+        {
+            TimeIndex = index;
+            result = TryGetInfoDialog(out Dialog? dialog) == false;
+            if(result)
+            {
+                var timeStr = _timeSelector!.Options[index].GetAttribute("label");
+                timeOnly = TimeOnly.ParseExact(timeStr, "HH:mm", CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                dialog!.Close();
+            }
+        }
+        _logger.StopMethod(result, timeOnly);
         return result;
     }
 

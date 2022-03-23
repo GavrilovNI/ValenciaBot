@@ -25,6 +25,24 @@ public class DatePicker : DriverWithDialogs<IWebDriver>
     private IWebElement? _rightArrow;
 
     private Vector2? _firstDayOfMonthPosition;
+    private Vector2 FirstDayOfMonthPosition
+    {
+        get
+        {
+            bool stillFirst = GetDayButton(_firstDayOfMonthPosition!).GetAttribute("innerHTML") == "1";
+            if(stillFirst == false)
+                _firstDayOfMonthPosition = GetPositionOfFirstDay();
+            return _firstDayOfMonthPosition!;
+        }
+        set
+        {
+            bool isFirst = GetDayButton(value!).GetAttribute("innerHTML") == "1";
+            if(isFirst == false)
+                throw new ArgumentException("Not first day.");
+            else
+                _firstDayOfMonthPosition = value;
+        }
+    }
 
     public bool IsOpen
     {
@@ -67,7 +85,7 @@ public class DatePicker : DriverWithDialogs<IWebDriver>
         _leftArrow = _table.FindElement(By.XPath("thead/tr[1]/th[1]"));
         _rightArrow = _table.FindElement(By.XPath("thead/tr[1]/th[3]"));
 
-        _firstDayOfMonthPosition = GetPositionOfFirstDay();
+        FirstDayOfMonthPosition = GetPositionOfFirstDay();
     }
 
     public void Open()
@@ -103,28 +121,28 @@ public class DatePicker : DriverWithDialogs<IWebDriver>
         if(_iTab.Opened == false)
             _iTab.Open();
         _rightArrow!.Click();
-        _firstDayOfMonthPosition = GetPositionOfFirstDay();
+        FirstDayOfMonthPosition = GetPositionOfFirstDay();
     }
     public void MoveToPrevMonth()
     {
         if(_iTab.Opened == false)
             _iTab.Open();
-        _leftArrow.Click();
-        _firstDayOfMonthPosition = GetPositionOfFirstDay();
+        _leftArrow!.Click();
+        FirstDayOfMonthPosition = GetPositionOfFirstDay();
     }
 
     public void GoToYearAndMonth(DateOnly dateTime)
     {
         DateOnly currentDateTime = GetCurrentYearAndMonth();
         int monthDifference = currentDateTime.MonthDifference(dateTime);
-        IWebElement button = monthDifference > 0 ? _rightArrow : _leftArrow;
+        IWebElement button = monthDifference > 0 ? _rightArrow! : _leftArrow!;
         monthDifference = (int)MathF.Abs(monthDifference);
 
         for(int i = 0; i < monthDifference; i++)
-            button.Click();
+            button!.Click();
 
         if(monthDifference > 0)
-            _firstDayOfMonthPosition = GetPositionOfFirstDay();
+            FirstDayOfMonthPosition = GetPositionOfFirstDay();
     }
 
     private Vector2 GetPositionOfFirstDay()
@@ -145,8 +163,8 @@ public class DatePicker : DriverWithDialogs<IWebDriver>
     private Vector2 GetDayPosition(int dayInMonth)
     {
         dayInMonth--;
-        int x = (_firstDayOfMonthPosition.X + dayInMonth) % _calendarSize.x;
-        int y = _firstDayOfMonthPosition.Y + (_firstDayOfMonthPosition.X + dayInMonth) / _calendarSize.x;
+        int x = (FirstDayOfMonthPosition.X + dayInMonth) % _calendarSize.x;
+        int y = FirstDayOfMonthPosition.Y + (FirstDayOfMonthPosition.X + dayInMonth) / _calendarSize.x;
         return new Vector2(x, y);
     }
     private IWebElement GetDayButton(Vector2 position)
