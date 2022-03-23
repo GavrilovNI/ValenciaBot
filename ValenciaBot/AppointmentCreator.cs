@@ -240,7 +240,11 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
 
         _serviceSelector = _driver.FindSelector(By.Id("servicios"));
         _centerSelector = _driver.FindSelector(By.Id("centros"));
-        _datePicker = new DatePicker(_driver, this, By.XPath("//*[@id=\"appointmentForm\"]/div[7]/div/div"));
+        By datePickerBy = By.XPath("//*[@id=\"appointmentForm\"]/div[7]/div/div");
+        if(_datePicker == null)
+            _datePicker = new DatePicker(_driver, this, datePickerBy);
+        else
+            _datePicker.Update(datePickerBy);
         _timeSelector = _driver.FindSelector(By.Id("hora"));
         _nameField = _driver.FindElement(By.Id("nameInput"));
         _surnameField = _driver.FindElement(By.Id("surnameInput"));

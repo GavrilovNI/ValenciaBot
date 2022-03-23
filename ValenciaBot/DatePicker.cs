@@ -7,6 +7,8 @@ namespace ValenciaBot;
 
 public class DatePicker : DriverWithDialogs<IWebDriver>
 {
+    public record Vector2(int X, int Y);
+
     private const string _activeClass = "day ng-binding ng-scope active";
     private const string _avaliableClass = "day ng-binding ng-scope";
     private const string _unavaliableClass = "day ng-binding ng-scope disabled";
@@ -14,27 +16,34 @@ public class DatePicker : DriverWithDialogs<IWebDriver>
     private const string _currenDayClass = "day ng-binding ng-scope current disabled";
 
     private readonly ITab _iTab;
-    private readonly By _dropdownBy;
 
-    private IWebElement Dropdown
+    private IWebElement? _dropDown;
+    private IWebElement? _showCalendarButton;
+    private IWebElement? _table;
+    private IWebElement? _yearAndMonthButton;
+    private IWebElement? _leftArrow;
+    private IWebElement? _rightArrow;
+
+    private Vector2? _firstDayOfMonthPosition;
+
+    public bool IsOpen
     {
         get
         {
-            _iTab.Open();
-            return _driver.FindElement(_dropdownBy);
+            if(_iTab.Opened == false)
+                _iTab.Open();
+            return _dropDown!.GetAttribute("className") == "dropdown open";
         }
     }
-
-    private IWebElement ShowCalendarButton => Dropdown.FindElement(By.XPath("a/div/div/button"));
-
-    private IWebElement Table => Dropdown.FindElement(By.XPath("ul/div/table"));
-
-    private IWebElement YearAndMonthButton => Table.FindElement(By.XPath("thead/tr[1]/th[2]"));
-    private IWebElement LeftArrow => Table.FindElement(By.XPath("thead/tr[1]/th[1]"));
-    private IWebElement RightArrow => Table.FindElement(By.XPath("thead/tr[1]/th[3]"));
-
-    public bool IsOpen => Dropdown.GetAttribute("className") == "dropdown open";
-    public bool DayPicked => Dropdown.FindElement(By.XPath("a/div/input")).GetAttribute("className").Contains("ng-empty") == false;
+    public bool DayPicked
+    {
+        get
+        {
+            if(_iTab.Opened == false)
+                _iTab.Open();
+            return _dropDown!.FindElement(By.XPath("a/div/input")).GetAttribute("className").Contains("ng-empty") == false;
+        }
+    }
 
     private (int x, int y) _calendarSize = (7, 6);
 
@@ -44,25 +53,39 @@ public class DatePicker : DriverWithDialogs<IWebDriver>
     {
         _logger.StartMethod(driver, iTab, dropdownBy);
         _iTab = iTab;
-        _dropdownBy = dropdownBy;
+        Update(dropdownBy);
         _logger.StopMethod();
+    }
+
+    public void Update(By dropdownBy)
+    {
+        _iTab.Open();
+        _dropDown = _driver.FindElement(dropdownBy);
+        _showCalendarButton = _dropDown.FindElement(By.XPath("a/div/div/button"));
+        _table = _dropDown.FindElement(By.XPath("ul/div/table"));
+        _yearAndMonthButton = _table.FindElement(By.XPath("thead/tr[1]/th[2]"));
+        _leftArrow = _table.FindElement(By.XPath("thead/tr[1]/th[1]"));
+        _rightArrow = _table.FindElement(By.XPath("thead/tr[1]/th[3]"));
+
+        _firstDayOfMonthPosition = GetPositionOfFirstDay();
     }
 
     public void Open()
     {
         if(IsOpen == false)
-            ShowCalendarButton.Click();
+            _showCalendarButton!.Click();
     }
-
     public void Close()
     {
         if(IsOpen)
-            ShowCalendarButton.Click();
+            _showCalendarButton!.Click();
     }
 
     public DateOnly GetCurrentYearAndMonth()
     {
-        string stringDate = YearAndMonthButton.Text;
+        if(_iTab.Opened == false)
+            _iTab.Open();
+        string stringDate = _yearAndMonthButton!.Text;
         string stringYear = stringDate[..4];
         string stringMonth = stringDate.Substring(5, 3);
 
@@ -75,48 +98,97 @@ public class DatePicker : DriverWithDialogs<IWebDriver>
 
         return new DateOnly(year, month, 1);
     }
-
     public void MoveToNextMonth()
     {
-        RightArrow.Click();
+        if(_iTab.Opened == false)
+            _iTab.Open();
+        _rightArrow!.Click();
+        _firstDayOfMonthPosition = GetPositionOfFirstDay();
     }
-
     public void MoveToPrevMonth()
     {
-        LeftArrow.Click();
+        if(_iTab.Opened == false)
+            _iTab.Open();
+        _leftArrow.Click();
+        _firstDayOfMonthPosition = GetPositionOfFirstDay();
     }
 
     public void GoToYearAndMonth(DateOnly dateTime)
     {
         DateOnly currentDateTime = GetCurrentYearAndMonth();
         int monthDifference = currentDateTime.MonthDifference(dateTime);
-        IWebElement button = monthDifference > 0 ? RightArrow : LeftArrow;
+        IWebElement button = monthDifference > 0 ? _rightArrow : _leftArrow;
         monthDifference = (int)MathF.Abs(monthDifference);
 
         for(int i = 0; i < monthDifference; i++)
             button.Click();
+
+        if(monthDifference > 0)
+            _firstDayOfMonthPosition = GetPositionOfFirstDay();
     }
 
-    private IWebElement GetDayButton(int day)
+    private Vector2 GetPositionOfFirstDay()
     {
-        (int x, int y) = GetDayPosition(day);
-        return GetDayButton(x, y);
-    }
-    private IWebElement GetDayButton(int x, int y)
-    {
-        return Table.FindElement(By.XPath($"tbody/tr[{y + 1}]/td[{x + 1}]"));
+        for(int y = 0; y < _calendarSize.y; y++)
+        {
+            for(int x = 0; x < _calendarSize.x; x++)
+            {
+                IWebElement dayButton = GetDayButton(new Vector2(x, y));
+                int day = int.Parse(dayButton.GetAttribute("innerHTML"));
+                if(day == 1)
+                    return new(x, y);
+            }
+        }
+        throw new NotFoundException("First day button nor found.");
     }
 
+    private Vector2 GetDayPosition(int dayInMonth)
+    {
+        dayInMonth--;
+        int x = (_firstDayOfMonthPosition.X + dayInMonth) % _calendarSize.x;
+        int y = _firstDayOfMonthPosition.Y + (_firstDayOfMonthPosition.X + dayInMonth) / _calendarSize.x;
+        return new Vector2(x, y);
+    }
+    private IWebElement GetDayButton(Vector2 position)
+    {
+        return _table.FindElement(By.XPath($"tbody/tr[{position.Y + 1}]/td[{position.X + 1}]"));
+    }
+    private IWebElement GetDayButton(int dayInMonth)
+    {
+        Vector2 position = GetDayPosition(dayInMonth);
+        return GetDayButton(position);
+    }
+    
     public void PickDay(DateOnly dateOnly)
     {
         GoToYearAndMonth(dateOnly);
         PickDay(dateOnly.Day);
+    }
+    private void PickDay(int dayinMonth)
+    {
+        PickDay(GetDayButton(dayinMonth));
+    }
+    private void PickDay(IWebElement dayButton)
+    {
+        dayButton.Click();
         WaitLoading(out Dialog _);
     }
 
-    private void PickDay(int day)
+    private static bool IsDayAvaliable(IWebElement dayButton)
     {
-        GetDayButton(day).Click();
+        string currentClass = dayButton.GetAttribute("class");
+
+        if(currentClass == _avaliableClass || currentClass == _activeClass)
+            return true;
+        else if(currentClass == _pastDaysClass || currentClass == _currenDayClass || currentClass == _unavaliableClass)
+            return false;
+        else
+            throw new InvalidElementStateException("Day button has unknown class.");
+    }
+    public bool IsDayAvaliable(DateOnly exactDate)
+    {
+        GoToYearAndMonth(exactDate);
+        return IsDayAvaliable(GetDayButton(exactDate.Day));
     }
 
     public bool TryGetFirstAvaliableDay(out DateOnly dateTime, DateOnly from, DateOnly before)
@@ -154,65 +226,16 @@ public class DatePicker : DriverWithDialogs<IWebDriver>
         int daysInMonth = DateTime.DaysInMonth(currentYearAndMonth.Year, currentYearAndMonth.Month);
         for(int i = fromDay - 1; i < daysInMonth && i < beforeDay - 1; i++)
         {
-            int day = i + 1;
-            if(IsDayAvaliable(day))
+            int dayOfMonth = i + 1;
+            IWebElement dayElement = GetDayButton(dayOfMonth);
+            if(IsDayAvaliable(dayElement))
             {
-                dateTime = new DateOnly(currentYearAndMonth.Year, currentYearAndMonth.Month, day);
+                dateTime = new DateOnly(currentYearAndMonth.Year, currentYearAndMonth.Month, dayOfMonth);
                 return true;
             }
         }
 
         dateTime = currentYearAndMonth.AddDays(beforeDay - 1);
         return false;
-    }
-
-    private (int x, int y) GetDayPosition(int day)
-    {
-        day--;
-
-        (int firstX, int firstY) = GetPositionOfFirstDay();
-
-        int x = (firstX + day) % _calendarSize.x;
-        int y = firstY + (firstX + day) / _calendarSize.x;
-        return (x, y);
-    }
-
-    public bool IsDayAvaliable(DateOnly dateOnly)
-    {
-        GoToYearAndMonth(dateOnly);
-        return IsDayAvaliable(dateOnly.Day);
-    }
-
-    private bool IsDayAvaliable(int day)
-    {
-        (int x, int y) = GetDayPosition(day);
-        return IsDayAvaliable(x, y);
-    }
-
-    private bool IsDayAvaliable(int x, int y)
-    {
-        string currentClass = GetDayButton(x, y).GetAttribute("class");
-
-        if(currentClass == _avaliableClass || currentClass == _activeClass)
-            return true;
-        else if(currentClass == _pastDaysClass || currentClass == _currenDayClass || currentClass == _unavaliableClass)
-            return false;
-        else
-            throw new InvalidElementStateException("Day button has unknown class.");
-    }
-
-    private (int x, int y) GetPositionOfFirstDay()
-    {
-        for(int y = 0; y < _calendarSize.y; y++)
-        {
-            for(int x = 0; x < _calendarSize.x; x++)
-            {
-                IWebElement dayButton = GetDayButton(x, y);
-                int day = int.Parse(dayButton.Text);
-                if(day == 1)
-                    return (x, y);
-            }
-        }
-        throw new NotFoundException("First day button nor found.");
     }
 }
