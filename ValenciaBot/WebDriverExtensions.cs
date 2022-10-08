@@ -22,10 +22,24 @@ public static class WebDriverExtensions
         return executor.GetElementXPath(a) == executor.GetElementXPath(b);
     }
 
-    public static SelectElement FindSelector(this ISearchContext context, By by)
+    public static SelectElement? FindSelector(this ISearchContext context, By by)
     {
         IWebElement selectorElement = context.FindElement(by);
-        return new SelectElement(selectorElement);
+        return GetSelector(context, selectorElement);
+    }
+
+    public static SelectElement? GetSelector(this ISearchContext context, IWebElement selectorElement)
+    {
+        if(selectorElement == null)
+            return null;
+        try
+        {
+            return new SelectElement(selectorElement);
+        }
+        catch(Exception ex) when(ex is InvalidOperationException || ex is UnexpectedTagNameException)
+        {
+            return null;
+        }
     }
 
     public static string GetElementXPath(this IJavaScriptExecutor executor, IWebElement element)

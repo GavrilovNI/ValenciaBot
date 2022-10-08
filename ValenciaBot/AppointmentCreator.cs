@@ -10,12 +10,21 @@ namespace ValenciaBot;
 public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
 {
     private readonly string _url = "http://www.valencia.es/QSIGE/apps/citaprevia/index.html#!/newAppointment/";
+    private static readonly By _datePickerBy = By.XPath("//*[@id=\"appointmentForm\"]/div[7]/div/div");
+    private static readonly By _serviceBy = By.Id("servicios");
+    private static readonly By _centerBy = By.Id("centros");
+    private static readonly By _timeBy = By.Id("hora");
 
     private string _currentTab = String.Empty;
     public bool Opened => TabExists && _currentTab == _driver.CurrentTab;
     private bool TabExists => _driver.TabExists(_currentTab);
 
     private const int _minTimeZone = -12; // min world time zone
+
+    private IWebElement? _serviceSelectorElement;
+    private IWebElement? _centereSelectorElement;
+    private IWebElement? _datePickerElement;
+    private IWebElement? _timeSelectorElement;
 
     private SelectElement? _serviceSelector;
     private SelectElement? _centerSelector;
@@ -29,6 +38,61 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
     private IWebElement? _emailField;
 
     private IWebElement? _submitButton;
+
+
+
+    protected SelectElement? ServiceSelector
+    {
+        get
+        {
+            if(_serviceSelector == null)
+            {
+                if(_serviceSelectorElement == null)
+                    _serviceSelectorElement = _driver.FindElement(_serviceBy);
+                _serviceSelector = _driver.GetSelector(_serviceSelectorElement);
+
+            }
+            return _serviceSelector;
+        }
+    }
+    protected SelectElement? CenterSelector
+    {
+        get
+        {
+            if(_centerSelector == null)
+            {
+                if(_centereSelectorElement == null)
+                    _centereSelectorElement = _driver.FindElement(_centerBy);
+                _centerSelector = _driver.GetSelector(_centereSelectorElement);
+
+            }
+            return _centerSelector;
+        }
+    }
+    protected DatePicker? DatePicker
+    {
+        get
+        {
+            if(_datePicker == null)
+                _datePicker = new DatePicker(_driver, this, _datePickerBy);
+            return _datePicker;
+        }
+    }
+    protected SelectElement? TimeSelector
+    {
+        get
+        {
+            if(_timeSelector == null)
+            {
+                if(_timeSelectorElement == null)
+                    _timeSelectorElement = _driver.FindElement(_timeBy);
+                _timeSelector = _driver.GetSelector(_timeSelectorElement);
+
+            }
+            return _timeSelector;
+        }
+    }
+
 
     public AppointmentCreator(BetterChromeDriver driver) : base(driver)
     {
@@ -236,14 +300,16 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
     {
         _logger.StartMethod();
 
-        _serviceSelector = _driver.FindSelector(By.Id("servicios"));
-        _centerSelector = _driver.FindSelector(By.Id("centros"));
-        By datePickerBy = By.XPath("//*[@id=\"appointmentForm\"]/div[7]/div/div");
+        _serviceSelectorElement = _driver.FindElement(_serviceBy);
+        _serviceSelector = _driver.GetSelector(_serviceSelectorElement);
+        _centereSelectorElement = _driver.FindElement(_centerBy);
+        _centerSelector = _driver.GetSelector(_centereSelectorElement);
         if(_datePicker == null)
-            _datePicker = new DatePicker(_driver, this, datePickerBy);
+            _datePicker = new DatePicker(_driver, this, _datePickerBy);
         else
-            _datePicker.Update(datePickerBy);
-        _timeSelector = _driver.FindSelector(By.Id("hora"));
+            _datePicker.Update(_datePickerBy);
+        _timeSelectorElement = _driver.FindElement(_timeBy);
+        _timeSelector = _driver.GetSelector(_timeSelectorElement);
         _nameField = _driver.FindElement(By.Id("nameInput"));
         _surnameField = _driver.FindElement(By.Id("surnameInput"));
         _documentTypeSelector = _driver.FindSelector(By.Id("tipoDocumentos"));
@@ -314,30 +380,30 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
 
     private string Service
     {
-        get => GetSelectorValueText(_serviceSelector!);
+        get => GetSelectorValueText(ServiceSelector!);
         set
         {
-            SetSelectorValueByText(_serviceSelector!, value);
+            SetSelectorValueByText(ServiceSelector!, value);
             WaitLoading(out Dialog _);
         }
     }
 
     private string Center
     {
-        get => GetSelectorValueText(_centerSelector!);
+        get => GetSelectorValueText(CenterSelector!);
         set
         {
-            SetSelectorValueByText(_centerSelector!, value);
+            SetSelectorValueByText(CenterSelector!, value);
             WaitLoading(out Dialog _);
         }
     }
 
     private int TimeIndex
     {
-        get => GetSelectorValueIndex(_timeSelector!);
+        get => GetSelectorValueIndex(TimeSelector!);
         set
         {
-            SetSelectorValueByIndex(_timeSelector!, value);
+            SetSelectorValueByIndex(TimeSelector!, value);
             WaitLoading(out Dialog _);
         }
     }
@@ -346,7 +412,7 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
     {
         _logger.StartMethod(index);
 
-        var options = _timeSelector!.Options;
+        var options = TimeSelector!.Options;
         timeOnly = new();
         bool result = false;
         if(index >= 0 && index < options.Count)
@@ -355,7 +421,7 @@ public class AppointmentCreator : DriverWithDialogs<BetterChromeDriver>, ITab
             result = TryGetInfoDialog(out Dialog? dialog) == false;
             if(result)
             {
-                var timeStr = _timeSelector!.Options[index].GetAttribute("label");
+                var timeStr = TimeSelector!.Options[index].GetAttribute("label");
                 timeOnly = TimeOnly.ParseExact(timeStr, "HH:mm", CultureInfo.InvariantCulture);
             }
             else

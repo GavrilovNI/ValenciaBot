@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
+using Telegram.Bot.Extensions.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
@@ -24,7 +25,7 @@ public class TelegramBot : IDisposable
         _client = new TelegramBotClient(token);
         _subscribersFilePath = Path.GetFullPath(subscribersFilePath);
         LoadSubscribers();
-        _client.StartReceiving(HandleUpdateAsync, HandleErrorAsync, null, _cancellationToken.Token);
+        _client.StartReceiving(HandleUpdateAsync, HandleErrorAsync, (ReceiverOptions)null, _cancellationToken.Token);
     }
 
     private void LoadSubscribers()
@@ -46,7 +47,7 @@ public class TelegramBot : IDisposable
     public async void SendMessageToSubscribers(string message)
     {
         foreach(var subscriber in _subscribers)
-            await _client.SendTextMessageAsync(subscriber, message);
+            await SafeSendTextMessageAsync(subscriber, message);
     }
 
     public void SendCurrentAppointmentInfoToSubscribers(Program program)
@@ -57,9 +58,10 @@ public class TelegramBot : IDisposable
 
     private async void SendCurrentAppointmentInfoToSubscriber(Program program, long subscriberId)
     {
-        string programInfo = $"Info: {program.Info}. ";
-        string currentAppointmentInfo = programInfo + (program.ExistingAppointment.HasValue ? $"Current appointment date: {program.ExistingAppointment}." : "Now we have no appointment.");
-        await _client.SendTextMessageAsync(subscriberId, currentAppointmentInfo);
+        var currentInfo = program.CurrentInfo!;
+        string programInfo = $"Info: {currentInfo}. ";
+        string currentAppointmentInfo = programInfo + (currentInfo.ExistingAppointment.HasValue ? $"Current appointment date: {currentInfo.ExistingAppointment}." : "Now we have no appointment.");
+        await SafeSendTextMessageAsync(subscriberId, currentAppointmentInfo);
     }
 
     public void Dispose() => _cancellationToken.Cancel();
@@ -100,9 +102,20 @@ public class TelegramBot : IDisposable
         long subscriberId = message.Chat.Id;
         bool added = AddSubscriber(subscriberId);
         string replyMessage = added ? "You have been subscribed!" : "You are already subscribed!";
-        await _client.SendTextMessageAsync(subscriberId, replyMessage);
-        foreach(Program program in Program.Programs)
-            SendCurrentAppointmentInfoToSubscriber(program, subscriberId);
+        await SafeSendTextMessageAsync(subscriberId, replyMessage);
+        SendCurrentAppointmentInfoToSubscriber(Program.Programm, subscriberId);
+    }
+
+    private async Task SafeSendTextMessageAsync(long subscriberId, string message)
+    {
+        try
+        {
+            await _client.SendTextMessageAsync(subscriberId, message);
+        }
+        catch(ApiRequestException ex)
+        {
+            System.Console.WriteLine($"Error on sending message to subscriber: {ex}");
+        }
     }
 
     private static Task UnknownUpdateHandlerAsync(ITelegramBotClient _, Update update)

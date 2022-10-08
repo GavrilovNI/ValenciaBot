@@ -15,8 +15,7 @@ public class Program
     public static readonly string LogPath = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\logs\\log.log";
     private static readonly ClassLogger _logger = new(nameof(Program));
 
-    private static Program[] _programs = Array.Empty<Program>();
-    public static Program[] Programs => _programs;
+    public static Program Programm { get; private set; }
     
     private static readonly string _telegramBotSunscribersFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\botSubs.txt";
     private static readonly string _telegramBotTokenFile = DirectoryExt.ProjectDirectory!.Parent!.FullName + "\\telegramBotToken.txt";
@@ -43,7 +42,6 @@ public class Program
 
     public static void Main()
     {
-
         AppointmentInfo info = new()
         {
             Location = new LocationInfo()
@@ -62,6 +60,36 @@ public class Program
             }
         };
 
+        List<AppointmentInfo> infos = new()
+        {
+            info,
+            info with
+            {
+                PersonInfo = new PersonInfo()
+                {
+                    Name = "Name2",
+                    Surname = "Surname2",
+                    DocumentType = "Pasaporte",
+                    Document = "761234567",
+                    PhoneNumber = "681123457",
+                    Email = "email2@email.com"
+                }
+            },
+            info with
+            {
+                PersonInfo = new PersonInfo()
+                {
+                    Name = "Name3",
+                    Surname = "Surname3",
+                    DocumentType = "Pasaporte",
+                    Document = "761234568",
+                    PhoneNumber = "681123458",
+                    Email = "email3@email.com"
+                }
+            }
+        };
+
+
         AppointmentInfo testInfo = info with
         {
             Location = new LocationInfo()
@@ -71,38 +99,61 @@ public class Program
             }
         };
 
+        AppointmentInfo testInfo2 = info with
+        {
+            Location = new LocationInfo()
+            {
+                Service = "ATENCION TRIBUTARIA - CASA CONSISTORIAL",
+                Center = "GESTIÓN TRIBUTARIA INTEGRAL",
+            },
+            PersonInfo = new PersonInfo()
+            {
+                Name = "Name",
+                Surname = "Surname",
+                DocumentType = "NIF/NIE",
+                Document = "761234567",
+                PhoneNumber = "681123457",
+                Email = "email2@email.com"
+            }
+        };
 
-        DateOnly beforeDate = new(2022, 6, 13);
+
+        DateOnly beforeDate = new(2022, 12, 1);
 
         CreateTelegramBot();
-        _programs = new Program[]
-        {
-            new Program(testInfo, beforeDate),
-        };
-        /*_programs = new Program[]
-        {
-            new Program(info, beforeDate),
-            //new Program("PADRON CP - OAC Tabacalera", "OAC TABACALERA"),
-            //new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO ABASTOS"),
-            //new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO MARITIMO"),
-            //new Program("PADRON CP - Juntas Municipales", "JUNTA DE DISTRITO TRANSITS"),
-        };*/
+        Programm = new Program(beforeDate, infos);
 
-        //_bot?.SendMessageToSubscribers("Bot started.");
-        foreach (Program program in Programs)
-            program.Start();
+        var startMessage = $"Bot started. Appointments({Programm._appointmentInfos.Count}): ";
+        for(int i = 0; i < Programm._appointmentInfos.Count; ++i)
+            startMessage += $"{i}: {Programm._appointmentInfos[i].ToString()} ";
+        Bot?.SendMessageToSubscribers(startMessage);
+        Programm.Start();
         while(true)
         {
 
         }
         Console.ReadKey();
-        foreach(Program program in Programs)
-            program.Stop();
+        Programm.Stop();
         Bot?.SendMessageToSubscribers("Bot stopped.");
     }
 
-    public readonly AppointmentInfo Info;
-    private readonly DateOnly _beforeDateOriginal = new(2022, 6, 13);
+    public record AppointmentWorkInfo : AppointmentInfo
+    {
+        private readonly DateOnly _beforeDateOriginal;
+
+        public DateTime? ExistingAppointment { get; set; } = null;
+        public DateOnly BeforeDate => ExistingAppointment.HasValue ? ExistingAppointment.Value.ToDateOnly() : _beforeDateOriginal;
+
+        public AppointmentWorkInfo(AppointmentInfo appointmentInfo, DateOnly beforeDateOriginal) : base(appointmentInfo)
+        {
+            _beforeDateOriginal = beforeDateOriginal;
+        }
+    }
+
+    private List<AppointmentWorkInfo> _appointmentInfos = new List<AppointmentWorkInfo>();
+
+    public AppointmentWorkInfo? CurrentInfo { get; private set; }
+    //private readonly DateOnly _beforeDateOriginal = new(2022, 6, 13);
 
     private Appointments? _appointments;
     private AppointmentCreator? _creator;
@@ -111,35 +162,58 @@ public class Program
     private System.Timers.Timer? _timer = null;
     public bool Running => _timer != null;
 
-    public DateTime? ExistingAppointment { get; private set; } = null;
+    //public DateTime? ExistingAppointment { get; private set; } = null;
 
-    private DateOnly BeforeDate => ExistingAppointment.HasValue ? ExistingAppointment.Value.ToDateOnly() : _beforeDateOriginal;
+    //private DateOnly BeforeDate => ExistingAppointment.HasValue ? ExistingAppointment.Value.ToDateOnly() : _beforeDateOriginal;
 
     private readonly BetterChromeDriver _driver;
 
-    public Program(AppointmentInfo info, DateOnly beforeDate)
+    public Program(DateOnly beforeDate, AppointmentInfo info) :
+        this(new List<AppointmentWorkInfo>() { new AppointmentWorkInfo(info, beforeDate) })
     {
-        _logger.Log($"Program created. Appointment info: '{info}'. Before date: '{beforeDate}'");
-        Info = info;
-        _beforeDateOriginal = beforeDate;
+    }
+
+    public Program(DateOnly beforeDate, IEnumerable<AppointmentInfo> appoinmentInfos) :
+        this(appoinmentInfos.Select(appoinmentInfo => new AppointmentWorkInfo(appoinmentInfo, beforeDate)))
+    {
+    }
+
+    public Program(DateOnly beforeDate, params AppointmentInfo[] appoinmentInfos) :
+        this(appoinmentInfos.Select(appoinmentInfo => new AppointmentWorkInfo(appoinmentInfo, beforeDate)))
+    {
+        if(appoinmentInfos.Length == 0)
+            throw new ArgumentException(nameof(appoinmentInfos) + " can't be empty");
+    }
+
+    public Program(IEnumerable<AppointmentWorkInfo> appoinmentInfos)
+    {
+        _logger.Log($"Program created. Appointment infos:");
+        _appointmentInfos = new List<AppointmentWorkInfo>();
+
+        foreach(var appoinmentInfo in appoinmentInfos)
+        {
+            _appointmentInfos.Add(appoinmentInfo);
+            _logger.Log($"Appointment info: '{appoinmentInfo}'.");
+        }
 
         _driver = new BetterChromeDriver();
     }
 
-    private bool TryCreateBetterAppointment()
+    private bool TryCreateBetterAppointment(AppointmentWorkInfo appointmentInfo)
     {
-        _logger.StartMethod();
+        _logger.StartMethod(appointmentInfo);
+        CurrentInfo = appointmentInfo;
         try
         {
-            DateTime? oldAppointment = _appointments!.GetAppointment(Info.PersonInfo.Document, Info.Location)?.DateTime;
-            if(oldAppointment == null && ExistingAppointment != null)
+            DateTime? oldAppointment = _appointments!.GetAppointment(appointmentInfo.PersonInfo.Document, appointmentInfo.Location)?.DateTime;
+            if(oldAppointment == null && appointmentInfo.ExistingAppointment != null)
             {
                 Bot?.SendMessageToSubscribers("Warning: Existing appointment was removed since last check.");
                 _logger.LogWarning("Existing appointment was removed since last check");
             }
-            ExistingAppointment = oldAppointment;
+            appointmentInfo.ExistingAppointment = oldAppointment;
 
-            DateOnly? avaliableDate = _creator!.GetFirstAvaliableDate(Info.Location, BeforeDate);
+            DateOnly? avaliableDate = _creator!.GetFirstAvaliableDate(appointmentInfo.Location, appointmentInfo.BeforeDate);
             if(avaliableDate is null)
             {
                 //_bot?.SendMessageToSubscribers("Better date not found.");
@@ -149,14 +223,14 @@ public class Program
             else
             {
                 _logger.Log($"Found avaliable date {avaliableDate}");
-                Bot?.SendMessageToSubscribers($"Found avaliable date {avaliableDate}.");
+                Bot?.SendMessageToSubscribers($"Found avaliable date {avaliableDate} for {appointmentInfo}.");
 
-                if(ExistingAppointment.HasValue)
+                if(appointmentInfo.ExistingAppointment.HasValue)
                 {
-                    bool appointmentRemoved = _appointments!.TryRemoveAppointment(Info.PersonInfo.Document, Info.Location);
+                    bool appointmentRemoved = _appointments!.TryRemoveAppointment(appointmentInfo.PersonInfo.Document, appointmentInfo.Location);
                     if(appointmentRemoved == false)
                     {
-                        Bot?.SendMessageToSubscribers("Error: Appointment was not removed. But it exists.");
+                        Bot?.SendMessageToSubscribers($"Error: Appointment {appointmentInfo} was not removed. But it exists.");
                         _logger.StopMethod(false, "Appointment was not removed. But it exists");
                         return false;
                     }
@@ -165,25 +239,25 @@ public class Program
                 bool created = _creator.TrySelectDateTime(avaliableDate.Value, out DateTime createdTime);
                 if(created)
                 {
-                    _creator.FillPersonInfo(Info.PersonInfo);
+                    _creator.FillPersonInfo(appointmentInfo.PersonInfo);
                     created = _creator.TrySubmit();
                 }
 
                 if(created)
                 {
-                    DateTime? createdAppointmentDate = _appointments!.GetAppointment(Info.PersonInfo.Document, Info.Location)?.DateTime;
+                    DateTime? createdAppointmentDate = _appointments!.GetAppointment(appointmentInfo.PersonInfo.Document, appointmentInfo.Location)?.DateTime;
                     created = createdAppointmentDate == createdTime;
                 }
                 if(created)
                 {
-                    ExistingAppointment = createdTime;
-                    Bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}. Info : {Info}'.");
-                    _logger.StopMethod(true, "----Created new appointment----", createdTime, Info);
+                    appointmentInfo.ExistingAppointment = createdTime;
+                    Bot?.SendMessageToSubscribers($"New appointment created! Date: {createdTime}. Info : {appointmentInfo}'.");
+                    _logger.StopMethod(true, "----Created new appointment----", createdTime, appointmentInfo);
                     return true;
                 }
                 else
                 {
-                    Bot?.SendMessageToSubscribers($"Error: Appointment was not created but time found. Found time: {avaliableDate}.");
+                    Bot?.SendMessageToSubscribers($"Error: Appointment {appointmentInfo} was not created but time found. Found time: {avaliableDate}.");
                     _logger.StopMethod(false, "----Appointment was not created but time found----", avaliableDate);
                     return false;
                 }
@@ -193,7 +267,7 @@ public class Program
         {
             Bot?.SendMessageToSubscribers($"Caught exception: {ex}");
             _logger.LogError(ex.ToString());
-            _driver.Close();
+            _driver.Quit();
             _logger.StopMethod(false, ex);
             return false;
         }
@@ -216,8 +290,16 @@ public class Program
             bool needToBeRestartedImmidiately = false;
             do
             {
-                bool doneFine = TryCreateBetterAppointment();
-                needToBeRestartedImmidiately = doneFine == false;
+                bool doneFine = true;
+                foreach(var appointmentInfo in _appointmentInfos)
+                {
+                    doneFine = TryCreateBetterAppointment(appointmentInfo);
+                    if(doneFine == false)
+                    {
+                        needToBeRestartedImmidiately = true;
+                        break;
+                    }
+                }
                 _logger.Log($"needToBeRestartedImmidiately :{needToBeRestartedImmidiately}");
             }
             while(needToBeRestartedImmidiately && _timer != null);

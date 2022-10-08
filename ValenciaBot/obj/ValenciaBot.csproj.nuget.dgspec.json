@@ -22,7 +22,8 @@
         ],
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "https://api.nuget.org/v3/index.json": {}
+          "https://api.nuget.org/v3/index.json": {},
+          "https://nuget.emzi0767.com/api/v3/index.json": {}
         },
         "frameworks": {
           "net6.0": {
@@ -42,19 +43,19 @@
           "dependencies": {
             "Selenium.Support": {
               "target": "Package",
-              "version": "[4.1.0, )"
+              "version": "[4.5.1, )"
             },
             "Selenium.WebDriver": {
               "target": "Package",
-              "version": "[4.1.0, )"
+              "version": "[4.5.1, )"
             },
             "Selenium.WebDriver.ChromeDriver": {
               "target": "Package",
-              "version": "[99.0.4844.5100, )"
+              "version": "[106.0.5249.6100, )"
             },
             "Telegram.Bot": {
               "target": "Package",
-              "version": "[17.0.0, )"
+              "version": "[18.0.0, )"
             },
             "Telegram.Bot.Extensions.Polling": {
               "target": "Package",

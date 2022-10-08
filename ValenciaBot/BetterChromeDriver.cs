@@ -189,7 +189,10 @@ public class BetterChromeDriver : IWebDriver, IDisposable, IJavaScriptExecutor
         Driver?.Dispose();
     }
 
-    public void Quit() => Close();
+    public void Quit()
+    {
+        Close();
+    }
     public IOptions Manage()
     {
         FixTabs();
