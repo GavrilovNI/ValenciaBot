@@ -28,7 +28,7 @@ public static class WebDriverExtensions
         return GetSelector(context, selectorElement);
     }
 
-    public static SelectElement? GetSelector(this ISearchContext context, IWebElement selectorElement)
+    public static SelectElement? GetSelector(this ISearchContext context, IWebElement? selectorElement)
     {
         if(selectorElement == null)
             return null;
