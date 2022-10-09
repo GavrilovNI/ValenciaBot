@@ -9,22 +9,19 @@ namespace ValenciaBot;
 
 public class AppointmentCreator : AppoinmentCreationPage
 {
-    private const int _minTimeZone = -12; // min world time zone
-
     public AppointmentCreator(BetterChromeDriver driver) : base(driver)
     {
     }
 
-    public DateOnly? GetFirstAvaliableDate(LocationInfo location,
-                                           DateOnly beforeDate)
+    public DateOnly? GetFirstAvaliableDate(LocationInfo location, DateOnly fromDate, DateOnly beforeDate)
     {
-        _logger.StartMethod(location, beforeDate);
-        Reload();
+        _logger.StartMethod(location, fromDate, beforeDate);
+        //Reload();
 
         DateOnly? result = null;
         if(TrySelectlocation(location))
         {
-            bool found = TryGetFirstAvailableDate(out DateOnly dateTime, DateTime.UtcNow.AddHours(_minTimeZone).ToDateOnly(), beforeDate);
+            bool found = TryGetFirstAvailableDate(out DateOnly dateTime, fromDate, beforeDate);
             result = found ? dateTime : null;
         }
         _logger.StopMethod(result!);
@@ -55,9 +52,7 @@ public class AppointmentCreator : AppoinmentCreationPage
         return false;
     }
 
-    public bool CreateAppointment(AppointmentInfo info,
-                                  DateOnly beforeDate,
-                                  out DateTime appointmentDateTime)
+    public bool CreateAppointment(AppointmentInfo info, DateOnly fromDate, DateOnly beforeDate, out DateTime appointmentDateTime)
     {
         _logger.StartMethod(info, beforeDate);
         Reload();
@@ -65,7 +60,7 @@ public class AppointmentCreator : AppoinmentCreationPage
 
         try
         {
-            DateOnly? firstAvaliableDay = GetFirstAvaliableDate(info.Location, beforeDate);
+            DateOnly? firstAvaliableDay = GetFirstAvaliableDate(info.Location, fromDate, beforeDate);
             if(firstAvaliableDay == null)
             {
                 _logger.StopMethod(false);

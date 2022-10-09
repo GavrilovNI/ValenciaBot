@@ -81,7 +81,26 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
         }
     }
 
-    private bool TrySelectTime(int index, out TimeOnly timeOnly)
+    public bool TrySelectFirstAvailableTime(out TimeOnly timeOnly)
+    {
+        _logger.StartMethod();
+        
+        timeOnly = new();
+        bool result = _timeSelector.SetFirstNotEmptyValue(out string timeStr);
+        if(result)
+        {
+            WaitLoading(out Dialog _);
+            result = TryGetInfoDialog(out Dialog? dialog) == false;
+            if(result)
+                timeOnly = TimeOnly.ParseExact(timeStr, "HH:mm", CultureInfo.InvariantCulture);
+            else
+                dialog!.Close();
+        }
+        _logger.StopMethod(result, timeOnly);
+        return result;
+    }
+
+    public bool TrySelectTime(int index, out TimeOnly timeOnly)
     {
         _logger.StartMethod(index);
 
@@ -89,6 +108,8 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
         var options = timeSelector.Options;
         timeOnly = new();
         bool result = false;
+        _logger.Log($"options.Count = {options.Count}");
+        _logger.Log($"index = {index}");
         if(index >= 0 && index < options.Count)
         {
             TimeIndex = index;
@@ -138,6 +159,7 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
         _logger.StartMethod(info);
 
         Service = info.Service;
+        Center = "";
         Center = info.Center;
         bool result = TryGetInfoDialog(out Dialog? dialog) == false;
         dialog?.Close();
@@ -155,7 +177,7 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
         if(result)
         {
             _datePicker!.PickDay(exactDate);
-            result = TrySelectTime(1, out TimeOnly selectedTime); // 0 - none; 1,2,3... avaliable times
+            result = TrySelectFirstAvailableTime(out TimeOnly selectedTime);
             if(result)
                 appointmentDateTime = exactDate.ToDateTime(selectedTime);
         }
@@ -263,8 +285,10 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
         if(TabExists == false)
             _currentTab = _driver.CreateNewWindow();
 
+        if(TabExists)
+            _driver.SetTab(_currentTab);
         if(_driver.Url != _url)
-            Reload();
+                Reload();
         _logger.StopMethod();
     }
 

@@ -118,10 +118,11 @@ public class Program
         };
 
 
-        DateOnly beforeDate = new(2022, 12, 1);
+        DateOnly beforeDate = new(2022, 11, 4);
+        DateOnly startDate = new(2022, 10, 13);
 
         CreateTelegramBot();
-        Programm = new Program(beforeDate, infos);
+        Programm = new Program(startDate, beforeDate, infos);
 
         var startMessage = $"Bot started. Appointments({Programm._appointmentInfos.Count}): ";
         for(int i = 0; i < Programm._appointmentInfos.Count; ++i)
@@ -139,14 +140,45 @@ public class Program
 
     public record AppointmentWorkInfo : AppointmentInfo
     {
+        public DateOnly FromDate { get; private set; }
         private readonly DateOnly _beforeDateOriginal;
 
         public DateTime? ExistingAppointment { get; set; } = null;
-        public DateOnly BeforeDate => ExistingAppointment.HasValue ? ExistingAppointment.Value.ToDateOnly() : _beforeDateOriginal;
-
-        public AppointmentWorkInfo(AppointmentInfo appointmentInfo, DateOnly beforeDateOriginal) : base(appointmentInfo)
+        public DateOnly BeforeDate
         {
+            get
+            {
+                if(ExistingAppointment.HasValue)
+                {
+                    var existingValue = ExistingAppointment.Value.ToDateOnly();
+                    if(_beforeDateOriginal.CompareTo(existingValue) <= 0)
+                        return _beforeDateOriginal;
+                    else
+                        return existingValue;
+                }
+                else
+                {
+                    return _beforeDateOriginal;
+                }
+            }
+        }
+
+        public AppointmentWorkInfo(AppointmentInfo appointmentInfo, DateOnly fromDate, DateOnly beforeDateOriginal) : base(appointmentInfo)
+        {
+            FromDate = fromDate;
             _beforeDateOriginal = beforeDateOriginal;
+        }
+
+        public override string ToString()
+        {
+            StringBuilder sb = new(base.ToString());
+            sb.Append($", ");
+            sb.Append($"{nameof(FromDate)}: {FromDate}, ");
+            sb.Append($"{nameof(_beforeDateOriginal)}: {_beforeDateOriginal}, ");
+            sb.Append($"{nameof(ExistingAppointment)}: {(ExistingAppointment.HasValue ? ExistingAppointment : "not found")}, ");
+            sb.Append($"{nameof(BeforeDate)}: {BeforeDate}");
+
+            return sb.ToString();
         }
     }
 
@@ -168,18 +200,18 @@ public class Program
 
     private readonly BetterChromeDriver _driver;
 
-    public Program(DateOnly beforeDate, AppointmentInfo info) :
-        this(new List<AppointmentWorkInfo>() { new AppointmentWorkInfo(info, beforeDate) })
+    public Program(DateOnly fromDate, DateOnly beforeDate, AppointmentInfo info) :
+        this(new List<AppointmentWorkInfo>() { new AppointmentWorkInfo(info, fromDate, beforeDate) })
     {
     }
 
-    public Program(DateOnly beforeDate, IEnumerable<AppointmentInfo> appoinmentInfos) :
-        this(appoinmentInfos.Select(appoinmentInfo => new AppointmentWorkInfo(appoinmentInfo, beforeDate)))
+    public Program(DateOnly fromDate, DateOnly beforeDate, IEnumerable<AppointmentInfo> appoinmentInfos) :
+        this(appoinmentInfos.Select(appoinmentInfo => new AppointmentWorkInfo(appoinmentInfo, fromDate, beforeDate)))
     {
     }
 
-    public Program(DateOnly beforeDate, params AppointmentInfo[] appoinmentInfos) :
-        this(appoinmentInfos.Select(appoinmentInfo => new AppointmentWorkInfo(appoinmentInfo, beforeDate)))
+    public Program(DateOnly fromDate, DateOnly beforeDate, params AppointmentInfo[] appoinmentInfos) :
+        this(appoinmentInfos.Select(appoinmentInfo => new AppointmentWorkInfo(appoinmentInfo, fromDate, beforeDate)))
     {
         if(appoinmentInfos.Length == 0)
             throw new ArgumentException(nameof(appoinmentInfos) + " can't be empty");
@@ -213,7 +245,7 @@ public class Program
             }
             appointmentInfo.ExistingAppointment = oldAppointment;
 
-            DateOnly? avaliableDate = _creator!.GetFirstAvaliableDate(appointmentInfo.Location, appointmentInfo.BeforeDate);
+            DateOnly? avaliableDate = _creator!.GetFirstAvaliableDate(appointmentInfo.Location, appointmentInfo.FromDate, appointmentInfo.BeforeDate);
             if(avaliableDate is null)
             {
                 //_bot?.SendMessageToSubscribers("Better date not found.");
@@ -291,7 +323,9 @@ public class Program
             do
             {
                 bool doneFine = true;
-                foreach(var appointmentInfo in _appointmentInfos)
+                var notCreatedAppointments = _appointmentInfos.FindAll(a => a.ExistingAppointment.HasValue == false);
+                var usingAppointmentsList = (notCreatedAppointments.Count() == 0 ? _appointmentInfos : notCreatedAppointments);
+                foreach(var appointmentInfo in usingAppointmentsList)
                 {
                     doneFine = TryCreateBetterAppointment(appointmentInfo);
                     if(doneFine == false)

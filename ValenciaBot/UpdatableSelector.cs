@@ -61,6 +61,29 @@ public class UpdatableSelector
         _logger.StopMethod();
     }
 
+    public bool SetFirstNotEmptyValue(out string label)
+    {
+        _logger.StartMethod();
+        var selectElement = SelectElement;
+        if(selectElement == null)
+            throw SelectorNotAvailableException;
+        var options = selectElement.Options;
+        bool result = false;
+        label = String.Empty;
+        foreach(var option in options)
+        {
+            label = option.GetAttribute("label");
+            if(String.IsNullOrEmpty(label) == false)
+            {
+                selectElement.SelectByText(label);
+                result = true;
+                break;
+            }
+        }
+        _logger.StopMethod(result);
+        return result;
+    }
+
     public int GetSelectorValueIndex()
     {
         _logger.StartMethod();

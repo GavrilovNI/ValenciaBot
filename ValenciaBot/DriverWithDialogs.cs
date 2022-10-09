@@ -12,7 +12,7 @@ public class DriverWithDialogs<T> where T : IWebDriver
 {
     protected ClassLogger _logger;
 
-    public const int PreDelay = 500;
+    public const int PreDelay = 300;
     public const int DeltaDelay = 200;
     protected T _driver;
 
