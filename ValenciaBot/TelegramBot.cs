@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Telegram.Bot;
+﻿using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Extensions.Polling;
 using Telegram.Bot.Types;
@@ -30,7 +25,7 @@ public class TelegramBot : IDisposable
 
     private void LoadSubscribers()
     {
-        if(System.IO.File.Exists(_subscribersFilePath) == false)
+        if (System.IO.File.Exists(_subscribersFilePath) == false)
             return;
         string[] lines = System.IO.File.ReadAllLines(_subscribersFilePath);
         foreach (string line in lines)
@@ -39,20 +34,20 @@ public class TelegramBot : IDisposable
     private bool AddSubscriber(long id)
     {
         bool added = _subscribers.Add(id);
-        if(added)
+        if (added)
             System.IO.File.AppendAllText(_subscribersFilePath, $"{id}\n");
         return added;
     }
 
     public async void SendMessageToSubscribers(string message)
     {
-        foreach(var subscriber in _subscribers)
+        foreach (var subscriber in _subscribers)
             await SafeSendTextMessageAsync(subscriber, message);
     }
 
     public void SendCurrentAppointmentInfoToSubscribers(Program program)
     {
-        foreach(var subscriber in _subscribers)
+        foreach (var subscriber in _subscribers)
             SendCurrentAppointmentInfoToSubscriber(program, subscriber);
     }
 
@@ -90,7 +85,7 @@ public class TelegramBot : IDisposable
         {
             await handler;
         }
-        catch(Exception exception)
+        catch (Exception exception)
         {
             await HandleErrorAsync(botClient, exception, cancellationToken);
         }
@@ -110,9 +105,9 @@ public class TelegramBot : IDisposable
     {
         try
         {
-            await _client.SendTextMessageAsync(subscriberId, message);
+            await _client.SendMessage(subscriberId, message);
         }
-        catch(ApiRequestException ex)
+        catch (ApiRequestException ex)
         {
             System.Console.WriteLine($"Error on sending message to subscriber: {ex}");
         }

@@ -118,8 +118,8 @@ public class Program
         };
 
 
-        DateOnly beforeDate = new(2022, 11, 4);
-        DateOnly startDate = new(2022, 10, 13);
+        DateOnly beforeDate = new(2025, 12, 4);
+        DateOnly startDate = new(2025, 11, 7);
 
         CreateTelegramBot();
         Programm = new Program(startDate, beforeDate, infos);

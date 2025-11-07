@@ -1,8 +1,6 @@
 ﻿using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Support.UI;
 using System.Globalization;
-using ValenciaBot.DateTimeExtensions;
 using ValenciaBot.WebDriverExtensions;
 
 namespace ValenciaBot;
@@ -65,7 +63,7 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
     {
         get
         {
-            if(_datePicker == null)
+            if (_datePicker == null)
                 _datePicker = new DatePicker(_driver, this, _datePickerBy);
             return _datePicker;
         }
@@ -84,14 +82,14 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
     public bool TrySelectFirstAvailableTime(out TimeOnly timeOnly)
     {
         _logger.StartMethod();
-        
+
         timeOnly = new();
         bool result = _timeSelector.SetFirstNotEmptyValue(out string timeStr);
-        if(result)
+        if (result)
         {
             WaitLoading(out Dialog _);
             result = TryGetInfoDialog(out Dialog? dialog) == false;
-            if(result)
+            if (result)
                 timeOnly = TimeOnly.ParseExact(timeStr, "HH:mm", CultureInfo.InvariantCulture);
             else
                 dialog!.Close();
@@ -110,11 +108,11 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
         bool result = false;
         _logger.Log($"options.Count = {options.Count}");
         _logger.Log($"index = {index}");
-        if(index >= 0 && index < options.Count)
+        if (index >= 0 && index < options.Count)
         {
             TimeIndex = index;
             result = TryGetInfoDialog(out Dialog? dialog) == false;
-            if(result)
+            if (result)
             {
                 var timeStr = timeSelector.Options[index].GetAttribute("label");
                 timeOnly = TimeOnly.ParseExact(timeStr, "HH:mm", CultureInfo.InvariantCulture);
@@ -146,8 +144,11 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
     public bool TryGetFirstAvailableDate(out DateOnly dateTime, DateOnly from, DateOnly before)
     {
         var datePicker = DatePicker;
-        if(datePicker == null)
+        if (datePicker == null)
+        {
+            dateTime = default;
             return false;
+        }
         datePicker.Open();
         bool found = datePicker.TryGetFirstAvaliableDay(out dateTime, from, before);
         datePicker.Close();
@@ -174,11 +175,11 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
         appointmentDateTime = DateTime.UnixEpoch;
         _datePicker!.Open();
         var result = _datePicker!.IsDayAvaliable(exactDate);
-        if(result)
+        if (result)
         {
             _datePicker!.PickDay(exactDate);
             result = TrySelectFirstAvailableTime(out TimeOnly selectedTime);
-            if(result)
+            if (result)
                 appointmentDateTime = exactDate.ToDateTime(selectedTime);
         }
         _datePicker!.Close();
@@ -196,7 +197,7 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
         Open();
 
         bool result = TrySelectlocation(info);
-        if(result)
+        if (result)
             result = TrySelectDateTime(exactDate, out appointmentDateTime);
         else
             appointmentDateTime = DateTime.UnixEpoch;
@@ -260,7 +261,7 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
 
         _serviceSelector.Update();
         _centerSelector.Update();
-        if(_datePicker == null)
+        if (_datePicker == null)
             _datePicker = new DatePicker(_driver, this, _datePickerBy);
         else
             _datePicker.Update(_datePickerBy);
@@ -282,13 +283,13 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
     {
         _logger.StartMethod();
 
-        if(TabExists == false)
+        if (TabExists == false)
             _currentTab = _driver.CreateNewWindow();
 
-        if(TabExists)
+        if (TabExists)
             _driver.SetTab(_currentTab);
-        if(_driver.Url != _url)
-                Reload();
+        if (_driver.Url != _url)
+            Reload();
         _logger.StopMethod();
     }
 
@@ -296,7 +297,7 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
     {
         _logger.StartMethod();
 
-        if(TabExists == false)
+        if (TabExists == false)
             _currentTab = _driver.CreateTab();
 
         _driver.SetTab(_currentTab);
@@ -308,14 +309,14 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
         _serviceSelector.Update();
         SelectElement serviceSelector = _serviceSelector.SelectElement;
         bool loadedWrong = serviceSelector == null;
-        if(loadedWrong == false && serviceSelector.Options.Count <= 1)
+        if (loadedWrong == false && serviceSelector.Options.Count <= 1)
         {
             var x = serviceSelector.Options;
             var c = serviceSelector.Options.Count;
             loadedWrong = true;
         }
 
-        if(loadedWrong)
+        if (loadedWrong)
         {
             _logger.LogError($"{nameof(AppointmentCreator)} page loaded wrong. Reopening");
             Reload();
@@ -332,7 +333,7 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
     {
         _logger.StartMethod();
 
-        if(TabExists)
+        if (TabExists)
             _driver.CloseTab(_currentTab);
         _currentTab = String.Empty;
 
@@ -343,13 +344,13 @@ public class AppoinmentCreationPage : DriverWithDialogs<BetterChromeDriver>, ITa
     {
         _logger.StartMethod();
 
-        if(Opened == false)
+        if (Opened == false)
             return false;
 
         _submitButton!.Submit();
 
         var dialogFound = TryGetInfoDialog(out Dialog? dialog);
-        if(dialogFound)
+        if (dialogFound)
             dialog!.Close();
         //wait for page loading here if you dont use TryGetInfoDialog
         var result = dialogFound == false && _driver.Url != _url;

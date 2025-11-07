@@ -3,3 +3,6 @@ Release/
 *.log
 botSubs.txt
 telegramBotToken.txt
+.vs/*
+ValenciaBot/obj/*
+
